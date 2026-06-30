@@ -71,8 +71,11 @@ function ProductCard({ item }: { item: FreshProduct }) {
       activeOpacity={0.75}
       onPress={() =>
         router.push({
-          pathname: "/tabs/CropDetail",
-          params: { cropDetailId: String(item.cropDetailId) },
+          pathname: "/tabs/FarmersBySubCategory",
+          params: {
+            subCategoryId: String(item.subCategoryId),  // field from your FreshProduct interface
+            cropName: item.itemName,
+          },
         })
       }
     >
@@ -268,21 +271,21 @@ export default function HomeScreen() {
         }
       >
         {categories.length > 0 && (
-  <ScrollView
-    horizontal
-    showsHorizontalScrollIndicator={false}
-    contentContainerStyle={styles.catList}
-  >
-    {categories.map((item) => (
-      <CategoryItem
-        key={String(item.Id)}
-        item={item}
-        active={activeCategoryId === item.Id}
-        onPress={() => handleCategoryPress(item)}
-      />
-    ))}
-  </ScrollView>
-)}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.catList}
+          >
+            {categories.map((item) => (
+              <CategoryItem
+                key={String(item.Id)}
+                item={item}
+                active={activeCategoryId === item.Id}
+                onPress={() => handleCategoryPress(item)}
+              />
+            ))}
+          </ScrollView>
+        )}
 
         <View style={styles.banner}>
           <View style={{ flex: 1 }}>
@@ -293,9 +296,9 @@ export default function HomeScreen() {
             <Text style={styles.bannerSub}>
               Handpicked produce{"\n"}from trusted farmers
             </Text>
-            <TouchableOpacity style={styles.shopBtn} activeOpacity={0.8}>
+            {/* <TouchableOpacity style={styles.shopBtn} activeOpacity={0.8}>
               <Text style={styles.shopBtnText}>Shop Now</Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
           <Text style={styles.bannerArt}>🧺</Text>
         </View>
