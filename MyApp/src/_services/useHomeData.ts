@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
+import * as Location from "expo-location";
 import {
   fetchUserGreeting,
   fetchCategories,
   fetchFreshProducts,
-  fetchNearbyFarmers,
+  fetchNearbyCrops,
   fetchMarketPrices,
   fetchCartCount,
   deduplicateBySubCategory,
   Category,
   FreshProduct,
-  NearbyFarmer,
+  NearbyCrop,
   MarketPrice,
   UserGreeting,
 } from "./homeApi";
@@ -18,7 +19,7 @@ interface HomeData {
   greeting: UserGreeting | null;
   categories: Category[];
   freshProducts: FreshProduct[];
-  farmers: NearbyFarmer[];
+  nearbyCrops: NearbyCrop[];
   marketPrices: MarketPrice[];
   cartCount: number;
 }
@@ -33,12 +34,27 @@ interface HomeState extends HomeData {
   productsHasMore: boolean;
 }
 
+// Falls back to this location if the user denies permission / location fails
+// (kept close to the sample data used during development).
+const DEFAULT_COORDS = { latitude: 79.0, longitude: 71.89 };
+
+async function getCurrentCoords(): Promise<{ latitude: number; longitude: number }> {
+  try {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== "granted") return DEFAULT_COORDS;
+    const pos = await Location.getCurrentPositionAsync({});
+    return { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+  } catch {
+    return DEFAULT_COORDS;
+  }
+}
+
 export function useHomeData(): HomeState {
   const [state, setState] = useState<HomeData>({
     greeting: null,
     categories: [],
     freshProducts: [],
-    farmers: [],
+    nearbyCrops: [],
     marketPrices: [],
     cartCount: 0,
   });
@@ -58,12 +74,14 @@ export function useHomeData(): HomeState {
     setProductsHasMore(true);
 
     try {
-      const [greeting, categories, freshPage, farmers, marketPrices, cart] =
+      const coords = await getCurrentCoords();
+
+      const [greeting, categories, freshPage, nearbyCrops, marketPrices, cart] =
         await Promise.allSettled([
           fetchUserGreeting(),
           fetchCategories(),
           fetchFreshProducts(0),
-          fetchNearbyFarmers(),
+          fetchNearbyCrops(coords.latitude, coords.longitude),
           fetchMarketPrices(),
           fetchCartCount(),
         ]);
@@ -80,7 +98,7 @@ export function useHomeData(): HomeState {
         categories:    categories.status    === "fulfilled" ? categories.value                       : [],
         // Deduplicate: one card per subcategory, showing the latest listing
         freshProducts: deduplicateBySubCategory(rawProducts),
-        farmers:       farmers.status       === "fulfilled" ? farmers.value                          : [],
+        nearbyCrops:   nearbyCrops.status   === "fulfilled" ? nearbyCrops.value                       : [],
         marketPrices:  marketPrices.status  === "fulfilled" ? marketPrices.value                     : [],
         cartCount:     cart.status          === "fulfilled" ? (cart.value?.count ?? 0)               : 0,
       });

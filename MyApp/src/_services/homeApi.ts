@@ -22,13 +22,20 @@ export interface FreshProduct {
   createdAt: string | null;    // ← ISO date string from backend
 }
 
-export interface NearbyFarmer {
-  farmerId: number;
+export interface NearbyCrop {
+  cropDetailId: number;
+  subCategoryId: number;
+  itemName: string;
+  unit: string;
+  cropPrice: number;
+  cropQuantity: number;
+  imageUrl: string;
   farmerName: string;
-  profileUrl: string;
-  phoneNumber: string;
-  totalCrops: number;
-  memberSince: string;
+  farmerProfileUrl: string;
+  farmerPhoneNumber: string;
+  categoryName: string;
+  createdAt: string | null;
+  distanceKm: number;
 }
 
 export interface MarketPrice {
@@ -80,20 +87,20 @@ export const fetchUserGreeting = async (): Promise<UserGreeting> => {
 };
 
 const CATEGORY_EMOJI_MAP: Record<string, string> = {
-  Vegetables:     "🥦",
-  Fruits:         "🍎",
-  "Leafy Greens": "🥬",
-  "Grains & Cereals":         "🌾",
-  Spices:         "🌶️",
-  "Pulses": "🫘",
-  "Oil Seeds":      "🌻",
-  "Dry Fruits": "🥜",
-  "Flowers":        "🌸",
-  "Herbs": "🌿",
-  "Animal Products": "🐄",
-  "Sugar Crops": "🎋",
-  "Millets": "🌾",
-  "Plantation Crops": "🌴",
+  Vegetables:           "🥦",
+  Fruits:               "🍎",
+  "Leafy Greens":       "🥬",
+  "Grains & Cereals":   "🌾",
+  Spices:               "🌶️",
+  "Pulses":             "🫘",
+  "Oil Seeds":          "🌻",
+  "Dry Fruits":         "🥜",
+  "Flowers":            "🌸",
+  "Herbs":              "🌿",
+  "Animal Products":    "🐄",
+  "Sugar Crops":        "🎋",
+  "Millets":            "🌾",
+  "Plantation Crops":   "🌴",
 };
 
 export const fetchCategories = async (): Promise<Category[]> => {
@@ -166,12 +173,41 @@ export const fetchFreshProducts = async (page = 0): Promise<FreshProductPage> =>
   };
 };
 
-export const fetchNearbyFarmers = async (): Promise<NearbyFarmer[]> => {
+function mapNearbyCrop(raw: any): NearbyCrop {
+  const cd = raw.cropDetails ?? {};
+  return {
+    cropDetailId:      cd.Id,
+    subCategoryId:     cd.subCategory?.Id ?? cd.Id,
+    itemName:          cd.subCategory?.itemName ?? "Unknown",
+    unit:              cd.subCategory?.units?.unit ?? "",
+    cropPrice:         cd.cropPrice,
+    cropQuantity:      cd.cropQuantity,
+    imageUrl:          cd.imageUrls?.[0] ?? "",
+    farmerName:        cd.user?.username ?? "Farmer",
+    farmerProfileUrl:  cd.user?.profileUrl ?? "",
+    farmerPhoneNumber: cd.user?.phoneNumber != null ? String(cd.user.phoneNumber) : "",
+    categoryName:      cd.subCategory?.categories?.categoryName ?? "",
+    createdAt:         cd.createdAt ?? null,
+    distanceKm:         typeof raw.distance === "number" ? raw.distance : 0,
+  };
+}
+
+/**
+ * Fetches crops near the given coordinates, sorted by distance (closest first).
+ * `radiusKm` mirrors the backend's default of 60km if omitted.
+ */
+export const fetchNearbyCrops = async (
+  latitude: number,
+  longitude: number,
+  radiusKm = 60
+): Promise<NearbyCrop[]> => {
   const token = await getToken();
-  const res = await API.get("/api/farmers/nearby", {
+  const res = await API.get("/crop/nearBy", {
+    params: { latitude, longitude, radius: radiusKm },
     headers: { Authorization: `Bearer ${token}` },
-  });
-  return res.data;
+  });console.log("called in near by crop");
+  const data = Array.isArray(res.data) ? res.data : [];
+  return data.map(mapNearbyCrop).sort((a, b) => a.distanceKm - b.distanceKm);
 };
 
 export const fetchMarketPrices = async (): Promise<MarketPrice[]> => {

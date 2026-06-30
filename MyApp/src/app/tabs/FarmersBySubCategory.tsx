@@ -204,7 +204,7 @@ export default function FarmersBySubCategory() {
       return;
     }
       try {
-        const res = await api.get("/getAllFarmars", {
+        const res = await api.get("/crop/getAllFarmars", {
           params: { subCategory: subCategoryId, page: pageNum },
           headers: { Authorization: `Bearer ${token}` },
         });

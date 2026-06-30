@@ -15,7 +15,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useHomeData } from "../../_services/useHomeData";
-import { Category, FreshProduct, NearbyFarmer, MarketPrice, timeAgo } from "../../_services/homeApi";
+import { Category, FreshProduct, NearbyCrop, MarketPrice, timeAgo } from "../../_services/homeApi";
 
 
 const C = {
@@ -115,24 +115,40 @@ function ProductCard({ item }: { item: FreshProduct }) {
   );
 }
 
-function FarmerCard({ item }: { item: NearbyFarmer }) {
+function NearbyCropCard({ item }: { item: NearbyCrop }) {
+  const router = useRouter();
   return (
-    <View style={styles.farmerCard}>
-      <Text style={styles.farmerEmoji}>👨‍🌾</Text>
-      <View style={styles.farmerInfo}>
-        <Text style={styles.farmerName}>{item.farmerName}</Text>
-        <View style={styles.starsRow}>
-          {[1, 2, 3, 4, 5].map((i) => (
-            <Ionicons key={i} name="star" size={11} color={C.accent} />
-          ))}
-        </View>
-        <Text style={styles.farmerType}>{item.totalCrops} crops listed</Text>
-        <Text style={styles.farmerType}>Since {item.memberSince}</Text>
+    <TouchableOpacity
+      style={styles.farmerCard}
+      activeOpacity={0.75}
+      onPress={() =>
+        router.push({
+          pathname: "/tabs/FarmersBySubCategory",
+          params: {
+            subCategoryId: String(item.subCategoryId),
+            cropName: item.itemName,
+          },
+        })
+      }
+    >
+      <View style={styles.nearbyImgBox}>
+        {item.imageUrl ? (
+          <Image source={{ uri: item.imageUrl }} style={styles.prodImg} resizeMode="cover" />
+        ) : (
+          <Text style={styles.prodEmoji}>🌿</Text>
+        )}
       </View>
-      <TouchableOpacity style={styles.viewFarmBtn} activeOpacity={0.8}>
-        <Text style={styles.viewFarmText}>View Farm</Text>
-      </TouchableOpacity>
-    </View>
+      <View style={styles.farmerInfo}>
+        <Text style={styles.farmerName} numberOfLines={1}>{item.itemName}</Text>
+        <Text style={styles.farmerType}>
+          ₹{item.cropPrice}/{item.unit || "unit"} · {item.farmerName}
+        </Text>
+        <View style={styles.farmerDistRow}>
+          <Ionicons name="location-outline" size={11} color={C.textMuted} />
+          <Text style={styles.farmerDist}>{item.distanceKm.toFixed(1)} km away</Text>
+        </View>
+      </View>
+    </TouchableOpacity>
   );
 }
 
@@ -161,7 +177,7 @@ export default function HomeScreen() {
     greeting,
     categories = [],
     freshProducts = [],
-    farmers = [],
+    nearbyCrops = [],
     marketPrices = [],
     cartCount = 0,
     loading,
@@ -348,22 +364,22 @@ export default function HomeScreen() {
         )}
 
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Nearby Farmers</Text>
+          <Text style={styles.sectionTitle}>Nearby Crops</Text>
           <TouchableOpacity>
             <Text style={styles.seeAll}>See All</Text>
           </TouchableOpacity>
         </View>
-        {farmers.length > 0 ? (
+        {nearbyCrops.length > 0 ? (
           <FlatList
-            data={farmers}
-            keyExtractor={(i) => String(i.farmerId)}
+            data={nearbyCrops}
+            keyExtractor={(i) => String(i.cropDetailId)}
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.hList}
-            renderItem={({ item }) => <FarmerCard item={item} />}
+            renderItem={({ item }) => <NearbyCropCard item={item} />}
           />
         ) : (
-          <Text style={styles.emptyText}>No farmers found nearby.</Text>
+          <Text style={styles.emptyText}>No crops found nearby.</Text>
         )}
 
         <View style={styles.sectionHeader}>
@@ -631,6 +647,11 @@ const styles = StyleSheet.create({
     flexDirection: "row", alignItems: "flex-start", gap: 12,
   },
   farmerEmoji: { fontSize: 28, marginTop: 2 },
+  nearbyImgBox: {
+    width: 56, height: 56, borderRadius: 12,
+    backgroundColor: "#f7fdf7", justifyContent: "center", alignItems: "center",
+    overflow: "hidden",
+  },
   farmerInfo: { flex: 1 },
   farmerName: { fontSize: 14, fontWeight: "500", color: C.text },
   farmerType: { fontSize: 11, color: C.textMuted, marginTop: 2 },
