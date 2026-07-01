@@ -32,9 +32,7 @@ export default function LoginScreen() {
       const data = Linking.parse(url);
       const token = data.queryParams?.token;
       if (token && typeof token === "string") {
-        console.log("Google JWT:", token);
         await saveToken(token);
-        console.log("Token saved to AsyncStorage:", token);
         toastRef.current?.show("Google login successful 🌿");
         setTimeout(() => {
           router.replace("/tabs/home");
@@ -119,7 +117,7 @@ export default function LoginScreen() {
     try {
       const res = await API.post("/auth/ValidateOtp", { phoneNumber, otp: code }, {
         headers: { "Content-Type": "application/json" },
-      });console.log("OTP Verify Response:", res.data.message);
+      });
       await saveToken(res.data.message);
       toastRef.current?.show("OTP verified! Welcome back 🌿");
       setTimeout(() => router.replace("/tabs/home"), 1500);
@@ -159,7 +157,6 @@ export default function LoginScreen() {
         headers: { "Content-Type": "application/json" },
       });
       toastRef.current?.show("Login successful! Welcome back 🌿");
-      console.log("Login Response:", res.data.message);
       await saveToken(res.data.message);
       setTimeout(() => router.replace("/tabs/home"), 1500);
     } catch (e: any) {
@@ -248,13 +245,13 @@ export default function LoginScreen() {
     }
     setError("");
     setLoading(true);
-    try {console.log("Forgot Phone:", forgotPhone, "New Password:", newPassword);
+    try {
       const res = await API.post("/auth/resetPassword", {
         phoneNumber: forgotPhone,
         password : newPassword,
       }, {
         headers: { "Content-Type": "application/json" },
-      });console.log("Reset Password Response:", res.data.message);
+      });
       await saveToken(res.data.message);
     
       toastRef.current?.show(res.data.message || "Password reset successful!");

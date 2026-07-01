@@ -205,7 +205,7 @@ export const fetchNearbyCrops = async (
   const res = await API.get("/crop/nearBy", {
     params: { latitude, longitude, radius: radiusKm },
     headers: { Authorization: `Bearer ${token}` },
-  });console.log("called in near by crop");
+  });
   const data = Array.isArray(res.data) ? res.data : [];
   return data.map(mapNearbyCrop).sort((a, b) => a.distanceKm - b.distanceKm);
 };
