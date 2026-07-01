@@ -94,13 +94,24 @@ function Avatar({ name, uri }: { name: string; uri?: string | null }) {
   );
 }
 
-function StatPill({ icon, value, label }: { icon: string; value: string | number; label: string }) {
+function StatPill({
+  icon,
+  value,
+  label,
+  onPress,
+}: {
+  icon: string;
+  value: string | number;
+  label: string;
+  onPress?: () => void;
+}) {
+  const Wrapper = onPress ? TouchableOpacity : View;
   return (
-    <View style={styles.statPill}>
+    <Wrapper style={styles.statPill} onPress={onPress} activeOpacity={0.6}>
       <Ionicons name={icon as any} size={16} color={C.primary} />
       <Text style={styles.statValue}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
-    </View>
+    </Wrapper>
   );
 }
 
@@ -188,7 +199,9 @@ export default function ProfileScreen() {
   const [totalLikes, setTotalLikes] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [cropCount, setCropCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
+
   const fetchProfile = useCallback(async () => {
     setError(null);
     const token = await getToken();
@@ -198,11 +211,14 @@ export default function ProfileScreen() {
     }
     const { userId } = jwtDecode<JwtPayload>(token);
     try {
-      const [userRes, likesRes] = await Promise.allSettled([
+      const [userRes, likesRes, cropRes] = await Promise.allSettled([
         api.post(`/user/getUser?id=${userId}`, {}, {
           headers: { Authorization: `Bearer ${token}` },
         }),
         api.get(`/like/getLikes?farmerId=${userId}&page=0&size=10`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        api.get(`/crop/getByFarmer?farmerId=${userId}`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ]);
@@ -221,6 +237,12 @@ export default function ProfileScreen() {
       } else {
         setLikesPage0([]);
         setTotalLikes(0);
+      }
+
+      if (cropRes.status === "fulfilled") {
+        setCropCount(cropRes.value.data.count ?? 0);
+      } else {
+        setCropCount(0);
       }
     } catch (e) {
       setError("Something went wrong. Please try again.");
@@ -324,7 +346,17 @@ export default function ProfileScreen() {
         <View style={styles.statsRow}>
           <StatPill icon="heart" value={totalLikes} label="Followers" />
           <View style={styles.statDivider} />
-          <StatPill icon="leaf-outline" value="—" label="Crops Listed" />
+          <StatPill
+            icon="leaf-outline"
+            value={cropCount}
+            label="Crops Listed"
+            onPress={() =>
+              router.push({
+                pathname: "/tabs/MyCrops",
+                params: { farmerId: String(user?.id ?? "") },
+              })
+            }
+          />
         </View>
         <View style={styles.contactCard}>
           <View style={styles.contactRow}>
