@@ -410,7 +410,7 @@ export default function HomeScreen() {
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Fresh Today</Text>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push("/tabs/AllFreshProducts")}>
             <Text style={styles.seeAll}>See All</Text>
           </TouchableOpacity>
         </View>
@@ -440,7 +440,7 @@ export default function HomeScreen() {
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Nearby Crops</Text>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push("/tabs/AllNearbyCrops")}>
             <Text style={styles.seeAll}>See All</Text>
           </TouchableOpacity>
         </View>
