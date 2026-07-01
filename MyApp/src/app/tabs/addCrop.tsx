@@ -20,7 +20,6 @@ import API from "../../_services/api";
 import { jwtDecode } from 'jwt-decode';
 import { getToken } from "@/_services/storage";
 
-// ─── Colour tokens (matching home.tsx) ──────────────────────────────────────
 const C = {
   primary: "#3a7d44",
   primaryLight: "#e8f5e0",
@@ -40,10 +39,6 @@ const C = {
 
 const MAX_IMAGES = 5;
 
-// ─── Village geocoding ───────────────────────────────────────────────────────
-// We only ever resolve coordinates for the village/mandal/district/state the
-// farmer types in — never the device's GPS location — since the crop's
-// listed location should be the village centre, not wherever the photo was taken.
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -56,18 +51,12 @@ interface GeocodeResult {
   precision: LocationPrecision;
 }
 
-// We only ever resolve coordinates for the village/mandal/district/state the
-// farmer types in — never the device's GPS location — since the crop's
-// listed location should be the village centre, not wherever the photo was taken.
 async function geocodeVillage(
   village: string,
   mandal: string,
   district: string,
   state: string
 ): Promise<GeocodeResult | null> {
-  // Most specific first. Small villages are frequently missing from OSM's
-  // index, so we fall back to the mandal, then district, headquarters —
-  // which is still "village-level" accuracy for the backend's purposes.
   const attempts: { q: string; precision: LocationPrecision }[] = [
     { q: `${village}, ${mandal}, ${district}, ${state}, India`, precision: "village" },
     { q: `${village}, ${district}, ${state}, India`, precision: "village" },
@@ -84,8 +73,6 @@ async function geocodeVillage(
           headers: {
             Accept: "application/json",
             "Accept-Language": "en",
-            // Nominatim's usage policy rejects stock User-Agents from HTTP
-            // libraries — this must identify the app itself.
             "User-Agent": "FarmConnectApp/1.0 (contact: support@farmconnect.app)",
             Referer: "https://farmconnect.app",
           },
@@ -104,13 +91,11 @@ async function geocodeVillage(
     } catch (err) {
       console.log(`Nominatim lookup "${q}" threw:`, err);
     }
-    // Respect Nominatim's 1 request/second usage policy between attempts.
     if (i < attempts.length - 1) await sleep(1100);
   }
   return null;
 }
 
-// ─── Types ───────────────────────────────────────────────────────────────────
 interface Category {
   Id: number;
   categoryName: string;
@@ -129,21 +114,16 @@ interface Unit {
   unit: string;
 }
 
-// ─── Main Screen ─────────────────────────────────────────────────────────────
 export default function AddCropScreen() {
-  // ── Dropdown data
   const [categories, setCategories] = useState<Category[]>([]);
   const [subCategories, setSubCategories] = useState<SubCategory[]>([]);
   const [filteredSubs, setFilteredSubs] = useState<SubCategory[]>([]);
   const router = useRouter();
-  // ── Selections
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [selectedSub, setSelectedSub] = useState<SubCategory | null>(null);
   const [price, setPrice] = useState("");
   const [quantity, setQuantity] = useState("");
   const [images, setImages] = useState<string[]>([]);
-
-  // ── Location (village-level, not exact crop location)
   const [village, setVillage] = useState("");
   const [mandal, setMandal] = useState("");
   const [district, setDistrict] = useState("");
@@ -151,18 +131,13 @@ export default function AddCropScreen() {
   const [villageCoords, setVillageCoords] = useState<GeocodeResult | null>(null);
   const [locating, setLocating] = useState(false);
   const [locationNote, setLocationNote] = useState("");
-
-  // ── UI state
   const [catOpen, setCatOpen] = useState(false);
   const [subOpen, setSubOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [loadingCat, setLoadingCat] = useState(true);
   const [loadingSub, setLoadingSub] = useState(false);
-
-  // ── Form errors
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // ── Load categories on mount
 useEffect(() => {
   const loadCategories = async () => {
     try {
@@ -186,20 +161,18 @@ useEffect(() => {
   loadCategories();
 }, []);
 
-  // ── Load all subcategories once, filter client-side by selected category
 useEffect(() => {
-  if (!selectedCategory) return; // skip if no category selected yet
-
+  if (!selectedCategory) return; 
   const loadSubCategories = async () => {
     setLoadingSub(true);
-    setFilteredSubs([]); // clear previous list while loading
+    setFilteredSubs([]); 
      setSelectedSub(null);
     try {
       const token = await getToken();
       const res = await API.get(`/crop/getSubCategories?catId=${selectedCategory.Id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setFilteredSubs(res.data); // set directly, no client-side filter needed
+      setFilteredSubs(res.data); 
     } catch (error) {
       Alert.alert("Error", "Could not load sub-categories");
       console.log(error);
@@ -209,10 +182,8 @@ useEffect(() => {
   };
 
   loadSubCategories();
-}, [selectedCategory]); // ← runs every time category changes
+}, [selectedCategory]);
 
-
-  // ── Image picker
   const pickImages = useCallback(async () => {
     if (images.length >= MAX_IMAGES) {
       Alert.alert("Limit reached", `You can upload at most ${MAX_IMAGES} photos.`);
@@ -243,7 +214,6 @@ useEffect(() => {
     setImages((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  // ── Location field changes invalidate any previously resolved coordinates
   const onVillageFieldChange = (setter: (v: string) => void) => (t: string) => {
     setter(t);
     setVillageCoords(null);
@@ -282,7 +252,6 @@ useEffect(() => {
     }
   };
 
-  // ── Validate
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
     if (!selectedCategory) errs.category = "Select a category";
@@ -300,7 +269,6 @@ useEffect(() => {
     return Object.keys(errs).length === 0;
   };
 
-  // ── Submit
   const handleSubmit = async () => {
   if (!validate()) return;
   setSubmitting(true);
@@ -313,22 +281,16 @@ useEffect(() => {
 
     const form = new FormData();
 
-    // ← individual fields for @ModelAttribute
     form.append("itemId", String(selectedSub!.Id));
     form.append("cropPrice", String(parseFloat(price)));
     form.append("cropQuantity", String(parseFloat(quantity)));
     form.append("userId", String(userId));
-
-    // Village-level location — coordinates are of the village centre,
-    // not the device's GPS position.
     form.append("village", village.trim());
     form.append("mandal", mandal.trim());
     form.append("district", district.trim());
     form.append("state", stateName.trim());
     form.append("latitude", String(villageCoords!.latitude));
     form.append("longitude", String(villageCoords!.longitude));
-
-    // Images
     images.forEach((uri, i) => {
       const ext = uri.split(".").pop() ?? "jpg";
       const type = `image/${ext === "jpg" ? "jpeg" : ext}`;
@@ -337,7 +299,6 @@ useEffect(() => {
 
     await API.post("/crop/addCrop", form, {
       headers: { Authorization: `Bearer ${token}` },
-      // NO Content-Type header — let axios set multipart boundary
     });
 
     Alert.alert("Crop listed! 🌾", "Your crop is now visible to buyers.", [
@@ -353,13 +314,10 @@ useEffect(() => {
     setSubmitting(false);
   }
 };
-  // ─── Render helpers ───────────────────────────────────────────────────────
-
   const unitLabel = selectedSub?.units?.unit ?? "";
 
   return (
     <SafeAreaView style={s.safe}>
-      {/* Header */}
       <View style={s.header}>
         <TouchableOpacity
           style={s.backBtn}
@@ -382,7 +340,6 @@ useEffect(() => {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* ── Crop Photos ───────────────────────────────────────────── */}
           <SectionLabel title="Crop Photos" subtitle={`${images.length}/${MAX_IMAGES}`} />
           <View style={s.photoGrid}>
             {images.map((uri, i) => (
@@ -410,7 +367,6 @@ useEffect(() => {
           </View>
           {errors.images ? <ErrorMsg msg={errors.images} /> : null}
 
-          {/* ── Location ──────────────────────────────────────────────── */}
           <SectionLabel title="Farm Location" />
           <View style={s.locationGrid}>
             <TextInput
@@ -470,7 +426,6 @@ useEffect(() => {
           {errors.location ? <ErrorMsg msg={errors.location} /> : null}
           {!errors.location && locationNote ? <Text style={s.locationNoteText}>{locationNote}</Text> : null}
 
-          {/* ── Category ──────────────────────────────────────────────── */}
           <SectionLabel title="Category" />
           {loadingCat ? (
             <ActivityIndicator color={C.primary} style={{ marginBottom: 16 }} />
@@ -528,7 +483,6 @@ useEffect(() => {
             </>
           )}
 
-          {/* ── Crop Type (SubCategory) ───────────────────────────────── */}
           <SectionLabel title="Crop Type" />
           {loadingSub ? (
             <ActivityIndicator color={C.primary} style={{ marginBottom: 16 }} />
@@ -603,7 +557,6 @@ useEffect(() => {
             </>
           )}
 
-          {/* ── Price ─────────────────────────────────────────────────── */}
           <SectionLabel title={`Price${unitLabel ? ` (per ${unitLabel})` : ""}`} />
           <View style={[s.inputRow, errors.price ? s.fieldError : null]}>
             <Text style={s.rupee}>₹</Text>
@@ -622,7 +575,6 @@ useEffect(() => {
           </View>
           {errors.price ? <ErrorMsg msg={errors.price} /> : null}
 
-          {/* ── Quantity ──────────────────────────────────────────────── */}
           <SectionLabel title={`Quantity${unitLabel ? ` (${unitLabel})` : ""}`} />
           <View style={[s.inputRow, errors.quantity ? s.fieldError : null]}>
             <TextInput
@@ -640,7 +592,6 @@ useEffect(() => {
           </View>
           {errors.quantity ? <ErrorMsg msg={errors.quantity} /> : null}
 
-          {/* ── Summary card ──────────────────────────────────────────── */}
           {selectedSub && price && quantity ? (
             <View style={s.summaryCard}>
               <Text style={s.summaryTitle}>Listing Preview</Text>
@@ -655,7 +606,6 @@ useEffect(() => {
             </View>
           ) : null}
 
-          {/* ── Submit ────────────────────────────────────────────────── */}
           <TouchableOpacity
             style={[s.submitBtn, submitting && s.submitBtnDisabled]}
             onPress={handleSubmit}
@@ -681,7 +631,6 @@ useEffect(() => {
   );
 }
 
-// ─── Tiny helpers ─────────────────────────────────────────────────────────────
 
 function SectionLabel({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
@@ -710,13 +659,11 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 18, paddingBottom: 40, paddingTop: 6 },
 
-  // Header
   header: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     paddingHorizontal: 18, paddingVertical: 12,
@@ -730,7 +677,6 @@ const s = StyleSheet.create({
   },
   headerTitle: { fontSize: 17, fontWeight: "600", color: C.text },
 
-  // Label
   labelRow: {
     flexDirection: "row", alignItems: "center",
     justifyContent: "space-between", marginTop: 20, marginBottom: 8,
@@ -738,7 +684,6 @@ const s = StyleSheet.create({
   label: { fontSize: 13, fontWeight: "600", color: C.text },
   labelSub: { fontSize: 12, color: C.textMuted },
 
-  // Photo grid
   photoGrid: {
     flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 4,
   },
@@ -760,7 +705,6 @@ const s = StyleSheet.create({
   },
   photoAddText: { fontSize: 10, color: C.primary, fontWeight: "500" },
 
-  // Location
   locationGrid: {
     flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 10,
   },
@@ -786,7 +730,6 @@ const s = StyleSheet.create({
     marginBottom: 6, marginTop: 2,
   },
 
-  // Dropdown
   dropdown: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     backgroundColor: C.card, borderRadius: 14,
@@ -821,7 +764,6 @@ const s = StyleSheet.create({
     fontSize: 13, paddingVertical: 16,
   },
 
-  // Input
   inputRow: {
     flexDirection: "row", alignItems: "center",
     backgroundColor: C.card, borderRadius: 14,
@@ -842,7 +784,6 @@ const s = StyleSheet.create({
   },
   fieldError: { borderColor: C.error },
 
-  // Error message
   errorRow: {
     flexDirection: "row", alignItems: "center",
     gap: 4, marginBottom: 6, marginTop: 2,
@@ -866,7 +807,6 @@ const s = StyleSheet.create({
   summaryLabel: { fontSize: 12, color: C.textSub },
   summaryValue: { fontSize: 12, fontWeight: "500", color: C.text },
 
-  // Submit
   submitBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
     backgroundColor: C.primary, borderRadius: 16,

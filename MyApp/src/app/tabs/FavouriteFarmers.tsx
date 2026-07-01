@@ -16,8 +16,6 @@ import api from "@/_services/api";
 import { getToken } from "@/_services/storage";
 import { jwtDecode } from "jwt-decode";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
 interface JwtPayload {
   userId: number;
   sub: string;
@@ -48,8 +46,6 @@ interface LikesPage {
   last: boolean;
 }
 
-// ── Design tokens ─────────────────────────────────────────────────────────────
-
 const C = {
   primary: "#3a7d44",
   primaryLight: "#e8f5e0",
@@ -63,8 +59,6 @@ const C = {
 };
 
 const PAGE_SIZE = 10;
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function formatPhone(phone: number): string {
   const s = String(phone);
@@ -82,8 +76,6 @@ function timeAgo(iso: string): string {
   if (months < 12) return `${months}mo ago`;
   return `${Math.floor(months / 12)}y ago`;
 }
-
-// ── Avatar ────────────────────────────────────────────────────────────────────
 
 function Avatar({ name, uri, size = 52 }: { name: string; uri?: string | null; size?: number }) {
   const initials = name
@@ -114,8 +106,6 @@ function Avatar({ name, uri, size = 52 }: { name: string; uri?: string | null; s
   );
 }
 
-// ── Buyer card ────────────────────────────────────────────────────────────────
-
 function BuyerCard({ entry }: { entry: LikeEntry }) {
   const { buyer, createdAt } = entry;
   return (
@@ -140,8 +130,6 @@ function BuyerCard({ entry }: { entry: LikeEntry }) {
   );
 }
 
-// ── Empty state ───────────────────────────────────────────────────────────────
-
 function EmptyState() {
   return (
     <View style={styles.emptyContainer}>
@@ -156,8 +144,6 @@ function EmptyState() {
   );
 }
 
-// ── Footer loader (shown while fetching next page) ────────────────────────────
-
 function FooterLoader({ visible }: { visible: boolean }) {
   if (!visible) return null;
   return (
@@ -168,8 +154,6 @@ function FooterLoader({ visible }: { visible: boolean }) {
   );
 }
 
-// ── Main screen ───────────────────────────────────────────────────────────────
-
 export default function FavouriteFarmers() {
   const router = useRouter();
   const { initialLikes, totalElements } = useLocalSearchParams<{
@@ -177,7 +161,6 @@ export default function FavouriteFarmers() {
     totalElements: string;
   }>();
 
-  // Seed state from Profile's page 0 — no extra network call needed for first render
   const [likes, setLikes] = useState<LikeEntry[]>(() => {
     try {
       return initialLikes ? JSON.parse(initialLikes) : [];
@@ -188,18 +171,14 @@ export default function FavouriteFarmers() {
 
   const total = parseInt(totalElements ?? "0", 10);
 
-  // Pagination state
-  const [page, setPage] = useState(0);           // page 0 already loaded via params
-  const [isLast, setIsLast] = useState(false);   // has backend said this is the last page?
+  const [page, setPage] = useState(0);
+  const [isLast, setIsLast] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const isFetching = useRef(false);              // guard against duplicate calls
+  const isFetching = useRef(false);
 
-  // On mount: if page 0 had fewer items than PAGE_SIZE it means it's the last page
   useEffect(() => {
     if (likes.length >= total) setIsLast(true);
   }, []);
-
-  // ── Fetch next page ───────────────────────────────────────────────────────
 
   const fetchNextPage = useCallback(async () => {
     if (isFetching.current || isLast) return;
@@ -231,13 +210,10 @@ export default function FavouriteFarmers() {
     }
   }, [page, isLast]);
 
-  // ── Render ────────────────────────────────────────────────────────────────
-
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" backgroundColor={C.card} />
 
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={22} color={C.text} />
@@ -270,16 +246,13 @@ export default function FavouriteFarmers() {
         }
         ListEmptyComponent={<EmptyState />}
         ListFooterComponent={<FooterLoader visible={loadingMore} />}
-        // ── Infinite scroll trigger ──────────────────────────────────────────
-        onEndReachedThreshold={0.4}        // trigger when 40% from the bottom
+        onEndReachedThreshold={0.4}      
         onEndReached={fetchNextPage}
         showsVerticalScrollIndicator={false}
       />
     </SafeAreaView>
   );
 }
-
-// ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },

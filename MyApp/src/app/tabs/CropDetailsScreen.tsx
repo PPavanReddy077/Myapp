@@ -28,12 +28,6 @@ const C = {
   textMuted: "#999999",
 };
 
-// ─── Placeholder ratings & reviews ──────────────────────────────────────────
-// TODO(backend): the API doesn't expose ratings/reviews yet. This block is a
-// realistic stand-in so the UI reads correctly; swap it out for a real
-// fetch (e.g. fetchCropReviews(cropDetailId)) the moment that endpoint exists.
-// Generating from cropDetailId so the same crop always shows the same
-// "rating" instead of changing every render.
 interface DummyReview {
   id: string;
   reviewerInitial: string;
@@ -53,12 +47,11 @@ const SAMPLE_COMMENTS = [
 const SAMPLE_NAMES = ["Ramesh K.", "Lakshmi N.", "Suresh P.", "Anitha R.", "Venkat M."];
 
 function buildDummyReviews(seedKey: string): { average: number; count: number; reviews: DummyReview[] } {
-  // Simple deterministic hash so the same crop always gets the same numbers.
   let hash = 0;
   for (let i = 0; i < seedKey.length; i++) hash = (hash * 31 + seedKey.charCodeAt(i)) >>> 0;
 
-  const count = 8 + (hash % 35); // 8–42 "reviews"
-  const average = Math.round((3.8 + ((hash >> 3) % 12) / 10) * 10) / 10; // 3.8–4.9
+  const count = 8 + (hash % 35); 
+  const average = Math.round((3.8 + ((hash >> 3) % 12) / 10) * 10) / 10;
 
   const reviews: DummyReview[] = Array.from({ length: 3 }).map((_, i) => {
     const h = (hash >> (i * 5)) >>> 0;
@@ -66,7 +59,7 @@ function buildDummyReviews(seedKey: string): { average: number; count: number; r
       id: `${seedKey}-${i}`,
       reviewerName: SAMPLE_NAMES[h % SAMPLE_NAMES.length],
       reviewerInitial: SAMPLE_NAMES[h % SAMPLE_NAMES.length][0],
-      rating: 3 + (h % 3), // 3–5 stars
+      rating: 3 + (h % 3),
       comment: SAMPLE_COMMENTS[(h >> 2) % SAMPLE_COMMENTS.length],
       daysAgo: 1 + (h % 28),
     };
@@ -149,7 +142,6 @@ export default function CropDetailsScreen() {
       </View>
 
       <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* ── Crop image ──────────────────────────────────────────────── */}
         <View style={s.imgBox}>
           {imageUrl ? (
             <Image source={{ uri: imageUrl }} style={s.img} resizeMode="cover" />
@@ -163,7 +155,6 @@ export default function CropDetailsScreen() {
           ) : null}
         </View>
 
-        {/* ── Crop info ───────────────────────────────────────────────── */}
         <View style={s.section}>
           <View style={s.titleRow}>
             <Text style={s.cropName}>{itemName}</Text>
@@ -197,7 +188,6 @@ export default function CropDetailsScreen() {
           </View>
         </View>
 
-        {/* ── Farmer card ─────────────────────────────────────────────── */}
         <View style={s.section}>
           <Text style={s.sectionTitle}>Sold by</Text>
           <View style={s.farmerCard}>
@@ -221,7 +211,6 @@ export default function CropDetailsScreen() {
           </View>
         </View>
 
-        {/* ── Ratings & reviews ───────────────────────────────────────── */}
         <View style={s.section}>
           <View style={s.titleRow}>
             <Text style={s.sectionTitle}>Ratings & Reviews</Text>
@@ -255,7 +244,6 @@ export default function CropDetailsScreen() {
         <View style={{ height: 16 }} />
       </ScrollView>
 
-      {/* ── Bottom action bar ─────────────────────────────────────────── */}
       <View style={s.actionBar}>
         <TouchableOpacity style={s.callActionBtn} onPress={handleCall} activeOpacity={0.85}>
           <Ionicons name="call-outline" size={18} color={C.primary} />

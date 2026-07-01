@@ -99,15 +99,12 @@ function Row({ item }: { item: NearbyCrop }) {
 
 export default function AllNearbyCrops() {
   const router = useRouter();
-
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("nearest");
-
   const [crops, setCrops] = useState<NearbyCrop[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -130,7 +127,6 @@ export default function AllNearbyCrops() {
     } finally {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

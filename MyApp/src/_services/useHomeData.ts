@@ -37,8 +37,6 @@ interface HomeState extends HomeData {
   productsHasMore: boolean;
 }
 
-// Falls back to this location if the user denies permission / location fails
-// (kept close to the sample data used during development).
 const DEFAULT_COORDS = { latitude: 79.0, longitude: 71.89 };
 
 async function getCurrentCoords(): Promise<{ latitude: number; longitude: number }> {
@@ -64,13 +62,9 @@ export function useHomeData(): HomeState {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
-
-  // ── Fresh-products pagination ──────────────────────────────────────────────
   const [productPage, setProductPage] = useState(0);
   const [productsHasMore, setProductsHasMore] = useState(true);
   const [productsLoadingMore, setProductsLoadingMore] = useState(false);
-  // null = showing the generic "fresh products" feed; otherwise the category
-  // whose crops are currently loaded via fetchByCategory
   const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
 
   const loadAll = async () => {
@@ -103,7 +97,6 @@ export function useHomeData(): HomeState {
       setState({
         greeting:      greeting.status      === "fulfilled" ? greeting.value                         : null,
         categories:    categories.status    === "fulfilled" ? categories.value                       : [],
-        // Deduplicate: one card per subcategory, showing the latest listing
         freshProducts: deduplicateBySubCategory(rawProducts),
         nearbyCrops:   nearbyCrops.status   === "fulfilled" ? nearbyCrops.value                       : [],
         marketPrices:  marketPrices.status  === "fulfilled" ? marketPrices.value                     : [],
@@ -128,14 +121,12 @@ export function useHomeData(): HomeState {
       setProductsHasMore(!result.last);
       setState((prev) => ({
         ...prev,
-        // Merge new page into existing list, then re-deduplicate
         freshProducts: deduplicateBySubCategory([
           ...prev.freshProducts,
           ...result.content,
         ]),
       }));
     } catch {
-      // keep existing list silently
     } finally {
       setProductsLoadingMore(false);
     }
@@ -150,12 +141,9 @@ export function useHomeData(): HomeState {
       setProductsHasMore(!result.last);
       setState((prev) => ({
         ...prev,
-        // No dedup here — the user tapped a category to see everything in
-        // it, so all matching listings should show, not just one per subcat.
         freshProducts: result.content,
       }));
     } catch {
-      // keep existing list silently
     }
   };
 
@@ -171,7 +159,6 @@ export function useHomeData(): HomeState {
         freshProducts: deduplicateBySubCategory(result.content),
       }));
     } catch {
-      // keep existing list silently
     }
   };
 

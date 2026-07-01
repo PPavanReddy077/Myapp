@@ -74,13 +74,12 @@ function ProductCard({ item }: { item: FreshProduct }) {
         router.push({
           pathname: "/tabs/FarmersBySubCategory",
           params: {
-            subCategoryId: String(item.subCategoryId),  // field from your FreshProduct interface
+            subCategoryId: String(item.subCategoryId),
             cropName: item.itemName,
           },
         })
       }
     >
-      {/* Image */}
       <View style={styles.prodImgBox}>
         {item.imageUrl ? (
           <Image
@@ -184,12 +183,9 @@ function MarketRow({ item }: { item: MarketPrice }) {
 export default function HomeScreen() {
   const router = useRouter();
   const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
-
-  // ---- Live device location (Swiggy/Zomato style) ----
   const [liveLocationLabel, setLiveLocationLabel] = useState<string>("");
   const [locationLoading, setLocationLoading] = useState(true);
   const [locationDenied, setLocationDenied] = useState(false);
-
   const fetchLiveLocation = useCallback(async () => {
     try {
       setLocationLoading(true);
@@ -201,7 +197,6 @@ export default function HomeScreen() {
         setLiveLocationLabel("Enable location");
         return;
       }
-
       const position = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
       });
@@ -211,11 +206,8 @@ export default function HomeScreen() {
       });
 
       if (place) {
-        // street / locality e.g. "MG Road" or "Sy No 12, Kondapur"
         const streetPart = place.street || place.name || place.district;
-        // village / town / city e.g. "Chilakaluripet" or "Hyderabad"
         const townPart = place.city || place.subregion || place.region;
-
         const label = [streetPart, townPart].filter(Boolean).join(", ");
         setLiveLocationLabel(label || "Location unavailable");
       } else {
@@ -278,7 +270,6 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" backgroundColor={C.card} />
 
-      {/* Live location bar — Swiggy/Zomato style */}
       <TouchableOpacity
         style={styles.locationBar}
         activeOpacity={0.7}
@@ -387,9 +378,7 @@ export default function HomeScreen() {
             <Text style={styles.bannerSub}>
               Handpicked produce{"\n"}from trusted farmers
             </Text>
-            {/* <TouchableOpacity style={styles.shopBtn} activeOpacity={0.8}>
-              <Text style={styles.shopBtnText}>Shop Now</Text>
-            </TouchableOpacity> */}
+
           </View>
           <Text style={styles.bannerArt}>🧺</Text>
         </View>

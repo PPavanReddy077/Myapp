@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from "react";
-import * as WebBrowser from "expo-web-browser";
 import * as Linking from "expo-linking";
 import { saveToken, getToken, removeToken } from "../../_services/storage";
 
@@ -50,18 +49,12 @@ export default function LoginScreen() {
 
   const toastRef = useRef<ToastRef>(null);
   const [view, setView] = useState<ViewState>("main");
-
-  // OTP flow
   const [phoneNumber, setPhoneNumber] = useState("");
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const otpRefs = useRef<(TextInput | null)[]>([]);
-
-  // Creds flow
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-
-  // Forgot password flow
   const [forgotPhone, setForgotPhone] = useState("");
   const [forgotOtp, setForgotOtp] = useState(["", "", "", "", "", ""]);
   const forgotOtpRefs = useRef<(TextInput | null)[]>([]);
@@ -69,10 +62,8 @@ export default function LoginScreen() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
   const [fontsLoaded] = useFonts({
     Poppins_800ExtraBold,
     Poppins_600SemiBold,
@@ -80,8 +71,6 @@ export default function LoginScreen() {
   });
 
   if (!fontsLoaded) return null;
-
-  // ── Handlers ──────────────────────────────────────────────
 
   const handleSendOtp = async () => {
     if (phoneNumber.length < 10) {
@@ -168,8 +157,6 @@ export default function LoginScreen() {
     }
   };
 
-  // ── Forgot Password: Step 1 — Send OTP to phone ───────────
-
   const handleForgotSendOtp = async () => {
     if (forgotPhone.length < 10) {
       setError("Enter a valid 10-digit mobile number.");
@@ -192,8 +179,6 @@ export default function LoginScreen() {
       setLoading(false);
     }
   };
-
-  // ── Forgot Password: Step 2 — Verify OTP ─────────────────
 
   const handleForgotVerifyOtp = async () => {
     const code = forgotOtp.join("");
@@ -228,8 +213,6 @@ export default function LoginScreen() {
     if (!text && index > 0) forgotOtpRefs.current[index - 1]?.focus();
   };
 
-  // ── Forgot Password: Step 3 — Set new password ───────────
-
   const handleResetPassword = async () => {
     if (!newPassword || !confirmPassword) {
       setError("Please fill in both password fields.");
@@ -255,7 +238,6 @@ export default function LoginScreen() {
       await saveToken(res.data.message);
     
       toastRef.current?.show(res.data.message || "Password reset successful!");
-      // Clear forgot flow state
       setForgotPhone("");
       setForgotOtp(["", "", "", "", "", ""]);
       setNewPassword("");
@@ -274,8 +256,6 @@ export default function LoginScreen() {
     setError("");
     setView(to);
   };
-
-  // ── Shared sub-components ──────────────────────────────────
 
   const BackButton = ({
     to,
@@ -394,8 +374,6 @@ export default function LoginScreen() {
     </View>
   );
 
-  // ── View: Main ─────────────────────────────────────────────
-
   const renderMain = () => (
     <>
       <Header />
@@ -497,8 +475,6 @@ export default function LoginScreen() {
     </>
   );
 
-  // ── View: OTP phone entry ──────────────────────────────────
-
   const renderOtp = () => (
     <>
       <BackButton to="main" />
@@ -527,8 +503,6 @@ export default function LoginScreen() {
       <PrimaryButton label="Send OTP" onPress={handleSendOtp} />
     </>
   );
-
-  // ── View: OTP verify ──────────────────────────────────────
 
   const renderOtpVerify = () => (
     <>
@@ -574,8 +548,6 @@ export default function LoginScreen() {
       </TouchableOpacity>
     </>
   );
-
-  // ── View: Username + Password ──────────────────────────────
 
   const renderCreds = () => (
     <>
@@ -630,8 +602,6 @@ export default function LoginScreen() {
     </>
   );
 
-  // ── View: Forgot Password — Step 1: Enter phone ───────────
-
   const renderForgot = () => (
     <>
       <BackButton to="creds" label="← Back to sign in" />
@@ -660,8 +630,6 @@ export default function LoginScreen() {
       <PrimaryButton label="Send OTP" onPress={handleForgotSendOtp} color="#FF9800" />
     </>
   );
-
-  // ── View: Forgot Password — Step 2: Verify OTP ───────────
 
   const renderForgotOtpVerify = () => (
     <>
@@ -708,8 +676,6 @@ export default function LoginScreen() {
     </>
   );
 
-  // ── View: Forgot Password — Step 3: New Password ─────────
-
   const renderNewPassword = () => (
     <>
       <Header />
@@ -721,7 +687,6 @@ export default function LoginScreen() {
       </Text>
       <ErrorBox />
 
-      {/* New Password */}
       <View style={{ position: "relative", marginBottom: 6 }}>
         <TextInput
           value={newPassword}
@@ -739,7 +704,6 @@ export default function LoginScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Confirm Password */}
       <View style={{ position: "relative", marginBottom: 24, marginTop: 14 }}>
         <TextInput
           value={confirmPassword}
@@ -760,8 +724,6 @@ export default function LoginScreen() {
       <PrimaryButton label="Reset Password" onPress={handleResetPassword} color="#FF9800" />
     </>
   );
-
-  // ── Root render ────────────────────────────────────────────
 
   return (
     <KeyboardAvoidingView

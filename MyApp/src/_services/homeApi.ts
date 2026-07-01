@@ -10,7 +10,7 @@ export interface Category {
 
 export interface FreshProduct {
   cropDetailId: number;
-  subCategoryId: number;       // ← for dedup key
+  subCategoryId: number;
   itemName: string;
   unit: string;
   cropPrice: number;
@@ -19,7 +19,7 @@ export interface FreshProduct {
   farmerName: string;
   farmerProfileUrl: string;
   categoryName: string;
-  createdAt: string | null;    // ← ISO date string from backend
+  createdAt: string | null;
 }
 
 export interface NearbyCrop {
@@ -57,12 +57,6 @@ export interface UserGreeting {
   deliveryLocation: string;
 }
 
-// ─── Time helper ──────────────────────────────────────────────────────────────
-
-/**
- * Returns a human-readable relative time string, e.g. "2h ago", "Just now".
- * Falls back to empty string if date is null / invalid.
- */
 export function timeAgo(isoDate: string | null): string {
   if (!isoDate) return "";
   const diff = Date.now() - new Date(isoDate).getTime();
@@ -75,8 +69,6 @@ export function timeAgo(isoDate: string | null): string {
   const days = Math.floor(hrs / 24);
   return `${days}d ago`;
 }
-
-// ──────────────────────────────────────────────────────────────────────────────
 
 export const fetchUserGreeting = async (): Promise<UserGreeting> => {
   const token = await getToken();
@@ -130,10 +122,6 @@ function mapFreshProduct(raw: any): FreshProduct {
   };
 }
 
-/**
- * Deduplicates a list of products by subCategoryId, keeping the entry
- * with the most recent createdAt for each subcategory.
- */
 export function deduplicateBySubCategory(products: FreshProduct[]): FreshProduct[] {
   const map = new Map<number, FreshProduct>();
   for (const p of products) {
@@ -141,7 +129,6 @@ export function deduplicateBySubCategory(products: FreshProduct[]): FreshProduct
     if (!existing) {
       map.set(p.subCategoryId, p);
     } else {
-      // Keep whichever has the newer createdAt
       const existingTime = existing.createdAt ? new Date(existing.createdAt).getTime() : 0;
       const thisTime     = p.createdAt         ? new Date(p.createdAt).getTime()         : 0;
       if (thisTime > existingTime) {
@@ -149,7 +136,6 @@ export function deduplicateBySubCategory(products: FreshProduct[]): FreshProduct
       }
     }
   }
-  // Sort newest-first so the scroll order reflects recency
   return Array.from(map.values()).sort((a, b) => {
     const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
     const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -173,12 +159,6 @@ export const fetchFreshProducts = async (page = 0): Promise<FreshProductPage> =>
   };
 };
 
-/**
- * Fetches crops for a specific category (e.g. when a category chip is tapped).
- * Backend returns a Spring Page<CropDetails> on success (same shape as
- * getFreshCrops), or a 400 with { message: "..." } when the category has
- * no crops — we treat that 400 as "empty page" rather than a hard error.
- */
 export const fetchCropsByCategory = async (
   catId: number,
   page = 0
@@ -194,7 +174,6 @@ export const fetchCropsByCategory = async (
       last: res.data.last ?? true,
     };
   } catch (err: any) {
-    // Backend intentionally returns 400 with a message when nothing matches
     if (err?.response?.status === 400) {
       return { content: [], last: true };
     }
@@ -221,10 +200,6 @@ function mapNearbyCrop(raw: any): NearbyCrop {
   };
 }
 
-/**
- * Fetches crops near the given coordinates, sorted by distance (closest first).
- * `radiusKm` mirrors the backend's default of 60km if omitted.
- */
 export const fetchNearbyCrops = async (
   latitude: number,
   longitude: number,

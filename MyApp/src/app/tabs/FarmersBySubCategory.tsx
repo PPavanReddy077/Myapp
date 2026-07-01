@@ -13,9 +13,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { getToken } from "@/_services/storage";
-import api from "../../_services/api"; // your central Axios instance
+import api from "../../_services/api"; 
 
-// ─── Design tokens (same palette as home.tsx) ────────────────────────────────
 const C = {
   primary: "#3a7d44",
   primaryLight: "#e8f5e0",
@@ -30,7 +29,6 @@ const C = {
   save: "#c67c00",
 };
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 interface Farmer {
   Id: number;
   cropPrice: number;
@@ -60,17 +58,15 @@ interface FilterOption {
   icon: string;
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
 const FILTERS: FilterOption[] = [
   { key: "bulk", label: "Bulk First", icon: "📦" },
   { key: "newest", label: "Newest", icon: "🆕" },
   { key: "price", label: "Lowest Price", icon: "💰" },
 ];
 
-const DEFAULT_FILTER: SortKey = "bulk"; // ← change this to swap default
+const DEFAULT_FILTER: SortKey = "bulk";
 const PAGE_SIZE = 10;
 
-// ─── Sort helper ─────────────────────────────────────────────────────────────
 function sortFarmers(list: Farmer[], key: SortKey): Farmer[] {
   const copy = [...list];
   switch (key) {
@@ -87,7 +83,6 @@ function sortFarmers(list: Farmer[], key: SortKey): Farmer[] {
   }
 }
 
-// ─── FarmerCard ───────────────────────────────────────────────────────────────
 function FarmerCard({ item, activeSort }: { item: Farmer; activeSort: SortKey }) {
   const router = useRouter();
   const unit = item.subCategory?.units?.unit ?? "unit";
@@ -125,7 +120,6 @@ function FarmerCard({ item, activeSort }: { item: Farmer; activeSort: SortKey })
         })
       }
     >
-      {/* Left: profile avatar */}
       <View style={styles.avatarBox}>
         {item.user?.profileUrl ? (
           <Image
@@ -138,7 +132,6 @@ function FarmerCard({ item, activeSort }: { item: Farmer; activeSort: SortKey })
         )}
       </View>
 
-      {/* Middle: info */}
       <View style={styles.cardBody}>
         <Text style={styles.farmerName} numberOfLines={1}>
           {item.user?.username ?? "Unknown Farmer"}
@@ -148,7 +141,6 @@ function FarmerCard({ item, activeSort }: { item: Farmer; activeSort: SortKey })
           {item.subCategory?.categories?.categoryName}
         </Text>
 
-        {/* Crop image strip */}
         {item.imageUrls?.[0] ? (
           <Image
             source={{ uri: item.imageUrls[0] }}
@@ -173,7 +165,6 @@ function FarmerCard({ item, activeSort }: { item: Farmer; activeSort: SortKey })
         </View>
       </View>
 
-      {/* Right: highlight badge + CTA */}
       <View style={styles.cardRight}>
         <View style={styles.highlightBadge}>
           <Text style={styles.highlightText} numberOfLines={2}>
@@ -186,7 +177,6 @@ function FarmerCard({ item, activeSort }: { item: Farmer; activeSort: SortKey })
   );
 }
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function FarmersBySubCategory() {
   const router = useRouter();
   const { subCategoryId, cropName } = useLocalSearchParams<{
@@ -202,7 +192,6 @@ export default function FarmersBySubCategory() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Keep a ref of the current page so loadMore closure stays fresh
   const pageRef = useRef(0);
 
   const fetchPage = useCallback(
@@ -238,7 +227,6 @@ export default function FarmersBySubCategory() {
     [subCategoryId]
   );
 
-  // Initial load
   useEffect(() => {
     fetchPage(0, true);
   }, [fetchPage]);
@@ -250,12 +238,10 @@ export default function FarmersBySubCategory() {
 
   const sorted = sortFarmers(allFarmers, activeFilter);
 
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" backgroundColor={C.card} />
 
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={22} color={C.text} />
@@ -270,7 +256,6 @@ export default function FarmersBySubCategory() {
         </View>
       </View>
 
-      {/* Filter chips */}
       <View style={styles.filterRow}>
         {FILTERS.map((f) => {
           const active = activeFilter === f.key;
@@ -290,7 +275,6 @@ export default function FarmersBySubCategory() {
         })}
       </View>
 
-      {/* Content */}
       {loading ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={C.primary} />
@@ -336,7 +320,6 @@ export default function FarmersBySubCategory() {
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
 
@@ -393,7 +376,6 @@ const styles = StyleSheet.create({
 
   list: { padding: 16, gap: 12 },
 
-  // Farmer card
   card: {
     backgroundColor: C.card,
     borderRadius: 16,
@@ -448,8 +430,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   highlightText: { fontSize: 10, fontWeight: "600", color: C.primary, textAlign: "center" },
-
-  // States
   centered: { flex: 1, justifyContent: "center", alignItems: "center", gap: 10 },
   loadingText: { fontSize: 13, color: C.textMuted },
   errorText: { fontSize: 13, color: C.textSub, textAlign: "center", marginHorizontal: 32 },

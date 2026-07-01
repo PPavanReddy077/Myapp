@@ -31,8 +31,6 @@ const C = {
   textMuted: "#999999",
 };
 
-// A listing counts as "bulk" once it has at least this much quantity available.
-// Tune this to whatever threshold makes sense for your farmers/buyers.
 const BULK_MIN_QTY = 50;
 
 type SortMode = "fresh" | "bulk" | "priceLowHigh" | "priceHighLow";
@@ -109,24 +107,20 @@ function Card({ item }: { item: FreshProduct }) {
 
 export default function AllFreshProducts() {
   const router = useRouter();
-
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("fresh");
-
   const [products, setProducts] = useState<FreshProduct[]>([]);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
   const fetchPage = useCallback(
     (pageNum: number, catId: number | null) =>
       catId != null ? fetchCropsByCategory(catId, pageNum) : fetchFreshProducts(pageNum),
     []
   );
-
   const loadFirstPage = useCallback(async (catId: number | null) => {
     setLoading(true);
     setError(null);
@@ -162,13 +156,11 @@ export default function AllFreshProducts() {
       setHasMore(!result.last);
       setProducts((prev) => [...prev, ...result.content]);
     } catch {
-      // keep existing list on failure
     } finally {
       setLoadingMore(false);
     }
   };
 
-  // Sort/filter is applied client-side over whatever pages have loaded so far.
   const displayProducts = useMemo(() => {
     let list = [...products];
     if (sortMode === "bulk") {

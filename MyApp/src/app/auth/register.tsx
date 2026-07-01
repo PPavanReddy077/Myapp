@@ -20,10 +20,10 @@ import {
     Poppins_400Regular,
 } from "@expo-google-fonts/poppins";
 import API from "../../_services/api";
-import Toast, { ToastRef } from "../../components/toast"; // ✅ import
+import Toast, { ToastRef } from "../../components/toast";
 
 export default function RegisterScreen() {
-    const toastRef = useRef<ToastRef>(null); // ✅ declared here
+    const toastRef = useRef<ToastRef>(null);
 
     const [avatar, setAvatar] = useState<string | null>(null);
     const [username, setUsername] = useState("");
@@ -43,8 +43,6 @@ export default function RegisterScreen() {
     });
 
     if (!fontsLoaded) return null;
-
-    // ── Image Picker ───────────────────────────────────────────
 
     const pickImage = async () => {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -79,8 +77,6 @@ export default function RegisterScreen() {
         }
     };
 
-    // ── Validation ─────────────────────────────────────────────
-
     const validate = () => {
         if (!username.trim()) return "Username is required.";
         if (username.trim().length < 3) return "Username must be at least 3 characters.";
@@ -90,8 +86,6 @@ export default function RegisterScreen() {
         if (password !== confirmPassword) return "Passwords do not match.";
         return null;
     };
-
-    // ── Submit ─────────────────────────────────────────────────
 
     const handleRegister = async () => {
         const validationError = validate();
@@ -120,7 +114,6 @@ export default function RegisterScreen() {
                 headers: { "Content-Type": "multipart/form-data" },
             });
 
-            // ✅ Show toast then navigate after it finishes
             toastRef.current?.show(`Welcome, ${username.trim()}! 🌿 Account created successfully.`);
             setTimeout(() => router.replace("/auth/login"), 1900);
 
@@ -130,8 +123,6 @@ export default function RegisterScreen() {
             setLoading(false);
         }
     };
-
-    // ── Shared styles ──────────────────────────────────────────
 
     const inputStyle: any = {
         backgroundColor: "#fff",
@@ -155,8 +146,6 @@ export default function RegisterScreen() {
 
     const fieldWrap: any = { marginBottom: 18 };
 
-    // ── Strength indicator ─────────────────────────────────────
-
     const getStrength = () => {
         if (!password) return { score: 0, label: "", color: "#E0E7E0" };
         let score = 0;
@@ -177,12 +166,10 @@ export default function RegisterScreen() {
     const strength = getStrength();
 
     return (
-        // ✅ Single KeyboardAvoidingView — no duplicate
         <KeyboardAvoidingView
             style={{ flex: 1, backgroundColor: "#FAF9F6" }}
             behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
-            {/* ✅ Toast outside ScrollView so it floats above everything */}
             <Toast ref={toastRef} />
 
             <ScrollView
@@ -195,7 +182,6 @@ export default function RegisterScreen() {
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
             >
-                {/* Back */}
                 <TouchableOpacity
                     onPress={() => router.back()}
                     style={{ marginBottom: 20 }}
@@ -211,7 +197,6 @@ export default function RegisterScreen() {
                     </Text>
                 </TouchableOpacity>
 
-                {/* Header */}
                 <View style={{ alignItems: "center", marginBottom: 32 }}>
                     <View
                         style={{
@@ -267,7 +252,6 @@ export default function RegisterScreen() {
                     </Text>
                 </View>
 
-                {/* Title */}
                 <Text
                     style={{
                         fontFamily: "Poppins_800ExtraBold",
@@ -276,7 +260,7 @@ export default function RegisterScreen() {
                         marginBottom: 4,
                     }}
                 >
-                    Create your account 🌿
+                    Create your account
                 </Text>
                 <Text
                     style={{
@@ -311,7 +295,6 @@ export default function RegisterScreen() {
                     </View>
                 ) : null}
 
-                {/* ── Profile Picture ── */}
                 <View style={{ alignItems: "center", marginBottom: 28 }}>
                     <TouchableOpacity onPress={pickImage} activeOpacity={0.85}>
                         <View
@@ -352,7 +335,6 @@ export default function RegisterScreen() {
                         </View>
                     </TouchableOpacity>
 
-                    {/* Edit options */}
                     <View style={{ flexDirection: "row", gap: 12, marginTop: 12 }}>
                         <TouchableOpacity
                             onPress={pickImage}
@@ -422,10 +404,8 @@ export default function RegisterScreen() {
                     </View>
                 </View>
 
-                {/* Divider */}
                 <View style={{ height: 1, backgroundColor: "#E0E7E0", marginBottom: 24 }} />
 
-                {/* ── Username ── */}
                 <View style={fieldWrap}>
                     <Text style={labelStyle}>Username</Text>
                     <TextInput
@@ -438,7 +418,6 @@ export default function RegisterScreen() {
                     />
                 </View>
 
-                {/* ── Phone ── */}
                 <View style={fieldWrap}>
                     <Text style={labelStyle}>Phone Number</Text>
                     <View style={{ ...inputStyle, flexDirection: "row", alignItems: "center" }}>
@@ -469,7 +448,6 @@ export default function RegisterScreen() {
                     </View>
                 </View>
 
-                {/* ── Email ── */}
                 <View style={fieldWrap}>
                     <Text style={labelStyle}>Email Address</Text>
                     <TextInput
@@ -483,7 +461,6 @@ export default function RegisterScreen() {
                     />
                 </View>
 
-                {/* ── Password ── */}
                 <View style={fieldWrap}>
                     <Text style={labelStyle}>Password</Text>
                     <View style={{ position: "relative" }}>
@@ -503,7 +480,6 @@ export default function RegisterScreen() {
                         </TouchableOpacity>
                     </View>
 
-                    {/* Strength bar */}
                     {password.length > 0 && (
                         <View style={{ marginTop: 8 }}>
                             <View style={{ flexDirection: "row", gap: 4, marginBottom: 4 }}>
@@ -535,7 +511,6 @@ export default function RegisterScreen() {
                     )}
                 </View>
 
-                {/* ── Confirm Password ── */}
                 <View style={fieldWrap}>
                     <Text style={labelStyle}>Confirm Password</Text>
                     <View style={{ position: "relative" }}>
@@ -570,7 +545,6 @@ export default function RegisterScreen() {
                     </View>
                 </View>
 
-                {/* ── Register Button ── */}
                 <TouchableOpacity
                     onPress={handleRegister}
                     activeOpacity={0.85}
@@ -602,7 +576,6 @@ export default function RegisterScreen() {
                     )}
                 </TouchableOpacity>
 
-                {/* Login link */}
                 <TouchableOpacity
                     onPress={() => router.replace("/auth/login")}
                     style={{ alignItems: "center", marginTop: 24 }}
