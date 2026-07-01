@@ -123,10 +123,21 @@ function NearbyCropCard({ item }: { item: NearbyCrop }) {
       activeOpacity={0.75}
       onPress={() =>
         router.push({
-          pathname: "/tabs/FarmersBySubCategory",
+          pathname: "/tabs/CropDetailsScreen",
           params: {
+            cropDetailId: String(item.cropDetailId),
             subCategoryId: String(item.subCategoryId),
-            cropName: item.itemName,
+            itemName: item.itemName,
+            unit: item.unit,
+            cropPrice: String(item.cropPrice),
+            cropQuantity: String(item.cropQuantity),
+            imageUrl: item.imageUrl,
+            farmerName: item.farmerName,
+            farmerProfileUrl: item.farmerProfileUrl,
+            farmerPhoneNumber: item.farmerPhoneNumber,
+            categoryName: item.categoryName,
+            createdAt: item.createdAt ?? "",
+            distanceKm: String(item.distanceKm),
           },
         })
       }

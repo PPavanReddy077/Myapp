@@ -107,8 +107,21 @@ function FarmerCard({ item, activeSort }: { item: Farmer; activeSort: SortKey })
       activeOpacity={0.75}
       onPress={() =>
         router.push({
-          pathname: "/tabs/CropDetail",
-          params: { cropDetailId: String(item.Id) },
+          pathname: "/tabs/CropDetailsScreen",
+          params: {
+            cropDetailId: String(item.Id),
+            subCategoryId: String(item.subCategory?.Id ?? ""),
+            itemName: item.subCategory?.itemName ?? "",
+            unit,
+            cropPrice: String(item.cropPrice),
+            cropQuantity: String(item.cropQuantity),
+            imageUrl: item.imageUrls?.[0] ?? "",
+            farmerName: item.user?.username ?? "",
+            farmerProfileUrl: item.user?.profileUrl ?? "",
+            farmerPhoneNumber: item.user?.phoneNumber != null ? String(item.user.phoneNumber) : "",
+            categoryName: item.subCategory?.categories?.categoryName ?? "",
+            createdAt: item.createdAt ?? "",
+          },
         })
       }
     >

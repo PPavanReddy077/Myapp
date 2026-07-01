@@ -40,6 +40,76 @@ const C = {
 
 const MAX_IMAGES = 5;
 
+// ─── Village geocoding ───────────────────────────────────────────────────────
+// We only ever resolve coordinates for the village/mandal/district/state the
+// farmer types in — never the device's GPS location — since the crop's
+// listed location should be the village centre, not wherever the photo was taken.
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export type LocationPrecision = "village" | "mandal" | "district";
+
+interface GeocodeResult {
+  latitude: number;
+  longitude: number;
+  precision: LocationPrecision;
+}
+
+// We only ever resolve coordinates for the village/mandal/district/state the
+// farmer types in — never the device's GPS location — since the crop's
+// listed location should be the village centre, not wherever the photo was taken.
+async function geocodeVillage(
+  village: string,
+  mandal: string,
+  district: string,
+  state: string
+): Promise<GeocodeResult | null> {
+  // Most specific first. Small villages are frequently missing from OSM's
+  // index, so we fall back to the mandal, then district, headquarters —
+  // which is still "village-level" accuracy for the backend's purposes.
+  const attempts: { q: string; precision: LocationPrecision }[] = [
+    { q: `${village}, ${mandal}, ${district}, ${state}, India`, precision: "village" },
+    { q: `${village}, ${district}, ${state}, India`, precision: "village" },
+    { q: `${mandal}, ${district}, ${state}, India`, precision: "mandal" },
+    { q: `${district}, ${state}, India`, precision: "district" },
+  ];
+
+  for (let i = 0; i < attempts.length; i++) {
+    const { q, precision } = attempts[i];
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=in&q=${encodeURIComponent(q)}`,
+        {
+          headers: {
+            Accept: "application/json",
+            "Accept-Language": "en",
+            // Nominatim's usage policy rejects stock User-Agents from HTTP
+            // libraries — this must identify the app itself.
+            "User-Agent": "FarmConnectApp/1.0 (contact: support@farmconnect.app)",
+            Referer: "https://farmconnect.app",
+          },
+        }
+      );
+      if (!res.ok) {
+        console.log(`Nominatim lookup "${q}" failed with status ${res.status}`);
+      } else {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          const lat = parseFloat(data[0].lat);
+          const lon = parseFloat(data[0].lon);
+          if (!isNaN(lat) && !isNaN(lon)) return { latitude: lat, longitude: lon, precision };
+        }
+      }
+    } catch (err) {
+      console.log(`Nominatim lookup "${q}" threw:`, err);
+    }
+    // Respect Nominatim's 1 request/second usage policy between attempts.
+    if (i < attempts.length - 1) await sleep(1100);
+  }
+  return null;
+}
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface Category {
   Id: number;
@@ -72,6 +142,15 @@ export default function AddCropScreen() {
   const [price, setPrice] = useState("");
   const [quantity, setQuantity] = useState("");
   const [images, setImages] = useState<string[]>([]);
+
+  // ── Location (village-level, not exact crop location)
+  const [village, setVillage] = useState("");
+  const [mandal, setMandal] = useState("");
+  const [district, setDistrict] = useState("");
+  const [stateName, setStateName] = useState("");
+  const [villageCoords, setVillageCoords] = useState<GeocodeResult | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [locationNote, setLocationNote] = useState("");
 
   // ── UI state
   const [catOpen, setCatOpen] = useState(false);
@@ -164,6 +243,45 @@ useEffect(() => {
     setImages((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  // ── Location field changes invalidate any previously resolved coordinates
+  const onVillageFieldChange = (setter: (v: string) => void) => (t: string) => {
+    setter(t);
+    setVillageCoords(null);
+    setLocationNote("");
+    setErrors((e) => ({ ...e, location: "" }));
+  };
+
+  const handleLocateVillage = async () => {
+    if (!village.trim() || !district.trim()) {
+      setErrors((e) => ({ ...e, location: "Enter at least village and district" }));
+      return;
+    }
+    setLocating(true);
+    setErrors((e) => ({ ...e, location: "" }));
+    setLocationNote("");
+    try {
+      const result = await geocodeVillage(village.trim(), mandal.trim(), district.trim(), stateName.trim());
+      if (!result) {
+        setErrors((e) => ({
+          ...e,
+          location:
+            "Couldn't locate this village, mandal, or district. Check spelling, or try again — the location service may be rate-limited.",
+        }));
+        return;
+      }
+      setVillageCoords(result);
+      if (result.precision !== "village") {
+        setLocationNote(
+          `"${village.trim()}" isn't individually mapped yet, so we used the ${result.precision} centre instead — still good enough for delivery matching.`
+        );
+      }
+    } catch {
+      setErrors((e) => ({ ...e, location: "Location lookup failed. Check your connection and try again." }));
+    } finally {
+      setLocating(false);
+    }
+  };
+
   // ── Validate
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
@@ -173,6 +291,10 @@ useEffect(() => {
       errs.price = "Enter a valid price";
     if (!quantity.trim() || isNaN(Number(quantity)) || Number(quantity) <= 0)
       errs.quantity = "Enter a valid quantity";
+    if (!village.trim() || !district.trim())
+      errs.location = "Enter at least village and district";
+    else if (!villageCoords)
+      errs.location = "Tap \"Locate Village\" to confirm the location";
     if (images.length === 0) errs.images = "Add at least 1 photo";
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -196,6 +318,15 @@ useEffect(() => {
     form.append("cropPrice", String(parseFloat(price)));
     form.append("cropQuantity", String(parseFloat(quantity)));
     form.append("userId", String(userId));
+
+    // Village-level location — coordinates are of the village centre,
+    // not the device's GPS position.
+    form.append("village", village.trim());
+    form.append("mandal", mandal.trim());
+    form.append("district", district.trim());
+    form.append("state", stateName.trim());
+    form.append("latitude", String(villageCoords!.latitude));
+    form.append("longitude", String(villageCoords!.longitude));
 
     // Images
     images.forEach((uri, i) => {
@@ -278,6 +409,66 @@ useEffect(() => {
             )}
           </View>
           {errors.images ? <ErrorMsg msg={errors.images} /> : null}
+
+          {/* ── Location ──────────────────────────────────────────────── */}
+          <SectionLabel title="Farm Location" />
+          <View style={s.locationGrid}>
+            <TextInput
+              style={[s.locationInput, errors.location ? s.fieldError : null]}
+              placeholder="Village *"
+              placeholderTextColor={C.textMuted}
+              value={village}
+              onChangeText={onVillageFieldChange(setVillage)}
+            />
+            <TextInput
+              style={[s.locationInput, errors.location ? s.fieldError : null]}
+              placeholder="Mandal (optional)"
+              placeholderTextColor={C.textMuted}
+              value={mandal}
+              onChangeText={onVillageFieldChange(setMandal)}
+            />
+            <TextInput
+              style={[s.locationInput, errors.location ? s.fieldError : null]}
+              placeholder="District *"
+              placeholderTextColor={C.textMuted}
+              value={district}
+              onChangeText={onVillageFieldChange(setDistrict)}
+            />
+            <TextInput
+              style={[s.locationInput, errors.location ? s.fieldError : null]}
+              placeholder="State (optional)"
+              placeholderTextColor={C.textMuted}
+              value={stateName}
+              onChangeText={onVillageFieldChange(setStateName)}
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[
+              s.locateBtn,
+              villageCoords ? s.locateBtnDone : null,
+            ]}
+            onPress={handleLocateVillage}
+            activeOpacity={0.8}
+            disabled={locating}
+          >
+            {locating ? (
+              <ActivityIndicator size="small" color={villageCoords ? C.primary : "#fff"} />
+            ) : (
+              <Ionicons
+                name={villageCoords ? "checkmark-circle" : "navigate-outline"}
+                size={16}
+                color={villageCoords ? C.primary : "#fff"}
+              />
+            )}
+            <Text style={[s.locateBtnText, villageCoords ? s.locateBtnTextDone : null]}>
+              {villageCoords
+                ? `Village located (${villageCoords.latitude.toFixed(4)}°, ${villageCoords.longitude.toFixed(4)}°)`
+                : "Locate Village"}
+            </Text>
+          </TouchableOpacity>
+          {errors.location ? <ErrorMsg msg={errors.location} /> : null}
+          {!errors.location && locationNote ? <Text style={s.locationNoteText}>{locationNote}</Text> : null}
 
           {/* ── Category ──────────────────────────────────────────────── */}
           <SectionLabel title="Category" />
@@ -457,6 +648,9 @@ useEffect(() => {
               <Row label="Category" value={selectedCategory?.categoryName ?? ""} />
               <Row label="Price" value={`₹${price} / ${unitLabel}`} />
               <Row label="Quantity" value={`${quantity} ${unitLabel}`} />
+              {village && district ? (
+                <Row label="Village" value={`${village}, ${district}`} />
+              ) : null}
               <Row label="Photos" value={`${images.length} uploaded`} />
             </View>
           ) : null}
@@ -565,6 +759,32 @@ const s = StyleSheet.create({
     justifyContent: "center", alignItems: "center", gap: 4,
   },
   photoAddText: { fontSize: 10, color: C.primary, fontWeight: "500" },
+
+  // Location
+  locationGrid: {
+    flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 10,
+  },
+  locationInput: {
+    flexBasis: "47%", flexGrow: 1,
+    backgroundColor: C.card, borderRadius: 14,
+    borderWidth: 1.5, borderColor: C.border,
+    paddingHorizontal: 14, paddingVertical: 13,
+    fontSize: 14, color: C.text,
+  },
+  locateBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    backgroundColor: C.primary, borderRadius: 14,
+    paddingVertical: 13, gap: 8, marginBottom: 4,
+  },
+  locateBtnDone: {
+    backgroundColor: C.primaryLight, borderWidth: 1.5, borderColor: C.primaryMid,
+  },
+  locateBtnText: { color: "#fff", fontSize: 13, fontWeight: "600" },
+  locateBtnTextDone: { color: C.primary },
+  locationNoteText: {
+    fontSize: 11.5, color: C.textSub, lineHeight: 16,
+    marginBottom: 6, marginTop: 2,
+  },
 
   // Dropdown
   dropdown: {
