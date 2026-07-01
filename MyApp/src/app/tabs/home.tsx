@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "expo-router";
 import {
   View,
@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import * as Location from "expo-location";
 import { useHomeData } from "../../_services/useHomeData";
 import { Category, FreshProduct, NearbyCrop, MarketPrice, timeAgo } from "../../_services/homeApi";
 
@@ -184,6 +185,54 @@ export default function HomeScreen() {
   const router = useRouter();
   const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
 
+  // ---- Live device location (Swiggy/Zomato style) ----
+  const [liveLocationLabel, setLiveLocationLabel] = useState<string>("");
+  const [locationLoading, setLocationLoading] = useState(true);
+  const [locationDenied, setLocationDenied] = useState(false);
+
+  const fetchLiveLocation = useCallback(async () => {
+    try {
+      setLocationLoading(true);
+      setLocationDenied(false);
+
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        setLocationDenied(true);
+        setLiveLocationLabel("Enable location");
+        return;
+      }
+
+      const position = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      console.log("Current position:", position.coords);
+      const [place] = await Location.reverseGeocodeAsync({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      });
+
+      if (place) {
+        // street / locality e.g. "MG Road" or "Sy No 12, Kondapur"
+        const streetPart = place.street || place.name || place.district;
+        // village / town / city e.g. "Chilakaluripet" or "Hyderabad"
+        const townPart = place.city || place.subregion || place.region;
+
+        const label = [streetPart, townPart].filter(Boolean).join(", ");
+        setLiveLocationLabel(label || "Location unavailable");
+      } else {
+        setLiveLocationLabel("Location unavailable");
+      }
+    } catch (e) {
+      setLiveLocationLabel("Location unavailable");
+    } finally {
+      setLocationLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchLiveLocation();
+  }, [fetchLiveLocation]);
+
   const {
     greeting,
     categories = [],
@@ -230,6 +279,28 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" backgroundColor={C.card} />
 
+      {/* Live location bar — Swiggy/Zomato style */}
+      <TouchableOpacity
+        style={styles.locationBar}
+        activeOpacity={0.7}
+        onPress={fetchLiveLocation}
+        disabled={locationLoading}
+      >
+        <Ionicons name="location-sharp" size={16} color={C.primary} />
+        <Text style={styles.locationBarText} numberOfLines={1}>
+          {locationLoading ? "Fetching your location…" : liveLocationLabel}
+        </Text>
+        {locationLoading ? (
+          <ActivityIndicator size="small" color={C.primary} />
+        ) : (
+          <Ionicons
+            name={locationDenied ? "refresh" : "chevron-down"}
+            size={14}
+            color={C.textMuted}
+          />
+        )}
+      </TouchableOpacity>
+
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <Text style={styles.greetSub}>
@@ -238,12 +309,6 @@ export default function HomeScreen() {
           <Text style={styles.greetMain}>
             What are you{"\n"}looking for today?
           </Text>
-          {greeting?.deliveryLocation ? (
-            <View style={styles.locationRow}>
-              <Ionicons name="location-outline" size={12} color={C.textMuted} />
-              <Text style={styles.locationText}>{greeting.deliveryLocation}</Text>
-            </View>
-          ) : null}
         </View>
 
         <View style={styles.headerIcons}>
@@ -509,6 +574,13 @@ const styles = StyleSheet.create({
   greetMain: { fontSize: 22, fontWeight: "500", color: C.text, marginTop: 2, lineHeight: 28 },
   locationRow: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 4 },
   locationText: { fontSize: 11, color: C.textMuted },
+  locationBar: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 18, paddingTop: 12, paddingBottom: 6,
+  },
+  locationBarText: {
+    flex: 1, fontSize: 13, fontWeight: "600", color: C.text,
+  },
   headerIcons: { flexDirection: "row", gap: 10, alignItems: "center", marginTop: 4 },
   iconBtn: {
     width: 40, height: 40, borderRadius: 20,
