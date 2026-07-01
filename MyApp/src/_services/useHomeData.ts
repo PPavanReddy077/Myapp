@@ -4,6 +4,7 @@ import {
   fetchUserGreeting,
   fetchCategories,
   fetchFreshProducts,
+  fetchCropsByCategory,
   fetchNearbyCrops,
   fetchMarketPrices,
   fetchCartCount,
@@ -29,6 +30,8 @@ interface HomeState extends HomeData {
   error: string | null;
   refetch: () => void;
   fetchByCategory: (categoryId: number) => void;
+  clearCategoryFilter: () => void;
+  activeCategoryId: number | null;
   loadMoreProducts: () => void;
   productsLoadingMore: boolean;
   productsHasMore: boolean;
@@ -66,12 +69,16 @@ export function useHomeData(): HomeState {
   const [productPage, setProductPage] = useState(0);
   const [productsHasMore, setProductsHasMore] = useState(true);
   const [productsLoadingMore, setProductsLoadingMore] = useState(false);
+  // null = showing the generic "fresh products" feed; otherwise the category
+  // whose crops are currently loaded via fetchByCategory
+  const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
 
   const loadAll = async () => {
     setLoading(true);
     setError(null);
     setProductPage(0);
     setProductsHasMore(true);
+    setActiveCategoryId(null);
 
     try {
       const coords = await getCurrentCoords();
@@ -114,7 +121,9 @@ export function useHomeData(): HomeState {
     setProductsLoadingMore(true);
     try {
       const nextPage = productPage + 1;
-      const result = await fetchFreshProducts(nextPage);
+      const result = activeCategoryId != null
+        ? await fetchCropsByCategory(activeCategoryId, nextPage)
+        : await fetchFreshProducts(nextPage);
       setProductPage(nextPage);
       setProductsHasMore(!result.last);
       setState((prev) => ({
@@ -133,9 +142,29 @@ export function useHomeData(): HomeState {
   };
 
   const fetchByCategory = async (categoryId: number) => {
+    setActiveCategoryId(categoryId);
+    setProductPage(0);
+    setProductsHasMore(true);
+    try {
+      const result = await fetchCropsByCategory(categoryId, 0);
+      setProductsHasMore(!result.last);
+      setState((prev) => ({
+        ...prev,
+        // No dedup here — the user tapped a category to see everything in
+        // it, so all matching listings should show, not just one per subcat.
+        freshProducts: result.content,
+      }));
+    } catch {
+      // keep existing list silently
+    }
+  };
+
+  const clearCategoryFilter = async () => {
+    setActiveCategoryId(null);
+    setProductPage(0);
+    setProductsHasMore(true);
     try {
       const result = await fetchFreshProducts(0);
-      setProductPage(0);
       setProductsHasMore(!result.last);
       setState((prev) => ({
         ...prev,
@@ -156,6 +185,8 @@ export function useHomeData(): HomeState {
     error,
     refetch: () => setTick((t) => t + 1),
     fetchByCategory,
+    clearCategoryFilter,
+    activeCategoryId,
     loadMoreProducts,
     productsLoadingMore,
     productsHasMore,

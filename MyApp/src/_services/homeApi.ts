@@ -173,6 +173,35 @@ export const fetchFreshProducts = async (page = 0): Promise<FreshProductPage> =>
   };
 };
 
+/**
+ * Fetches crops for a specific category (e.g. when a category chip is tapped).
+ * Backend returns a Spring Page<CropDetails> on success (same shape as
+ * getFreshCrops), or a 400 with { message: "..." } when the category has
+ * no crops — we treat that 400 as "empty page" rather than a hard error.
+ */
+export const fetchCropsByCategory = async (
+  catId: number,
+  page = 0
+): Promise<FreshProductPage> => {
+  const token = await getToken();
+  try {
+    const res = await API.get("/crop/getSubCategoryByCategoryId", {
+      params: { catId, page },
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return {
+      content: (res.data.content as any[]).map(mapFreshProduct),
+      last: res.data.last ?? true,
+    };
+  } catch (err: any) {
+    // Backend intentionally returns 400 with a message when nothing matches
+    if (err?.response?.status === 400) {
+      return { content: [], last: true };
+    }
+    throw err;
+  }
+};
+
 function mapNearbyCrop(raw: any): NearbyCrop {
   const cd = raw.cropDetails ?? {};
   return {
