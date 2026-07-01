@@ -460,7 +460,7 @@ export default function LoginScreen() {
       >
         <Text style={{ fontSize: 20 }}>🔐</Text>
         <Text style={{ fontFamily: "Poppins_600SemiBold", fontSize: 15, color: "#2E7D32" }}>
-          Login with Username & Password
+          Login with Email & Password
         </Text>
       </TouchableOpacity>
 
@@ -563,7 +563,7 @@ export default function LoginScreen() {
       <TextInput
         value={username}
         onChangeText={setUsername}
-        placeholder="Username or Email"
+        placeholder="Enter Email"
         placeholderTextColor="#B0BEC5"
         autoCapitalize="none"
         style={inputStyle}
@@ -572,7 +572,7 @@ export default function LoginScreen() {
         <TextInput
           value={password}
           onChangeText={setPassword}
-          placeholder="Password"
+          placeholder="Enter Password"
           placeholderTextColor="#B0BEC5"
           secureTextEntry={!showPassword}
           style={{ ...inputStyle, marginBottom: 0, paddingRight: 52 }}
