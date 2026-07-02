@@ -381,12 +381,6 @@ export default function ProfileScreen() {
             onPress={() => router.push("/tabs/Orders")}
           />
           <Divider />
-          <MenuRow
-            icon="heart-outline"
-            label="Wishlist"
-            sublabel="Items you saved for later"
-            onPress={() => router.push("/tabs/Wishlist")}
-          />
           <Divider />
           <MenuRow
             icon="cart-outline"
