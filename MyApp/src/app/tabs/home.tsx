@@ -470,7 +470,7 @@ export default function HomeScreen() {
             <Text style={{ fontSize: 26 }}>🚛</Text>
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.bulkTitle}>Need 100 kg Tomatoes?</Text>
+            <Text style={styles.bulkTitle}>Looking for any crop or quantity?</Text>
             <Text style={styles.bulkSub}>
               Get best farmer price directly.{"\n"}Request a quote in minutes.
             </Text>
@@ -499,11 +499,11 @@ export default function HomeScreen() {
 
         <TouchableOpacity
           style={styles.navItem}
-          onPress={() => router.push("/tabs/Orders")}
-          accessibilityLabel="Orders"
+          onPress={() => router.push("/tabs/Quotes")}
+          accessibilityLabel="Quotes"
         >
-          <Ionicons name="cube-outline" size={24} color="#ccc" />
-          <Text style={styles.navLabel}>Orders</Text>
+          <Ionicons name="document-text-outline" size={24} color="#ccc" />
+          <Text style={styles.navLabel}>Quotes</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -522,11 +522,11 @@ export default function HomeScreen() {
 
         <TouchableOpacity
           style={styles.navItem}
-          onPress={() => router.push("/tabs/Wishlist")}
-          accessibilityLabel="Wishlist"
+          onPress={() => router.push("/tabs/Orders")}
+          accessibilityLabel="Orders"
         >
-          <Ionicons name="heart-outline" size={24} color="#ccc" />
-          <Text style={styles.navLabel}>Wishlist</Text>
+          <Ionicons name="cube-outline" size={24} color="#ccc" />
+          <Text style={styles.navLabel}>Orders</Text>
         </TouchableOpacity>
 
         <TouchableOpacity

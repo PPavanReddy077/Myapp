@@ -49,6 +49,34 @@ interface LikesPage {
   last: boolean;
 }
 
+interface RequestQuotationInfo {
+  Id: number;
+  createdAt: string;
+  cropName: string;
+  cropPrice: number;
+  cropQuantity: number;
+  deliveryLocation: string;
+  negotiationStatus: string;
+  requiredDate: string;
+  updatedAt: string;
+  user: UserProfile;
+}
+
+interface AcceptedQuotation {
+  id: number;
+  createdAt: string;
+  updatedAt: string;
+  requestQuotation: RequestQuotationInfo;
+  user: UserProfile;
+}
+
+interface AcceptedQuotesPage {
+  content: AcceptedQuotation[];
+  totalElements: number;
+  totalPages: number;
+  last: boolean;
+}
+
 const C = {
   primary: "#3a7d44",
   primaryLight: "#e8f5e0",
@@ -197,6 +225,8 @@ export default function ProfileScreen() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [likesPage0, setLikesPage0] = useState<LikeEntry[]>([]);
   const [totalLikes, setTotalLikes] = useState(0);
+  const [acceptedQuotesPage0, setAcceptedQuotesPage0] = useState<AcceptedQuotation[]>([]);
+  const [totalAcceptedQuotes, setTotalAcceptedQuotes] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [cropCount, setCropCount] = useState(0);
@@ -211,7 +241,7 @@ export default function ProfileScreen() {
     }
     const { userId } = jwtDecode<JwtPayload>(token);
     try {
-      const [userRes, likesRes, cropRes] = await Promise.allSettled([
+      const [userRes, likesRes, cropRes, acceptedQuotesRes] = await Promise.allSettled([
         api.post(`/user/getUser?id=${userId}`, {}, {
           headers: { Authorization: `Bearer ${token}` },
         }),
@@ -219,6 +249,9 @@ export default function ProfileScreen() {
           headers: { Authorization: `Bearer ${token}` },
         }),
         api.get(`/crop/getByFarmer?farmerId=${userId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        api.get(`/quote/getAcceptedQuotes?page=0`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ]);
@@ -243,6 +276,15 @@ export default function ProfileScreen() {
         setCropCount(cropRes.value.data.count ?? 0);
       } else {
         setCropCount(0);
+      }
+
+      if (acceptedQuotesRes.status === "fulfilled") {
+        const page: AcceptedQuotesPage = acceptedQuotesRes.value.data;
+        setAcceptedQuotesPage0(page.content ?? []);
+        setTotalAcceptedQuotes(page.totalElements ?? 0);
+      } else {
+        setAcceptedQuotesPage0([]);
+        setTotalAcceptedQuotes(0);
       }
     } catch (e) {
       setError("Something went wrong. Please try again.");
@@ -310,7 +352,12 @@ export default function ProfileScreen() {
         <Text style={styles.headerTitle}>My Profile</Text>
         <TouchableOpacity
           style={styles.editBtn}
-          onPress={() => router.push("/tabs/EditProfile")}
+          onPress={() =>
+            router.push({
+              pathname: "/tabs/EditProfile",
+              params: { user: JSON.stringify(user) },
+            })
+          }
           activeOpacity={0.7}
         >
           <Ionicons name="pencil-outline" size={14} color={C.primary} />
@@ -354,6 +401,21 @@ export default function ProfileScreen() {
               router.push({
                 pathname: "/tabs/MyCrops",
                 params: { farmerId: String(user?.id ?? "") },
+              })
+            }
+          />
+          <View style={styles.statDivider} />
+          <StatPill
+            icon="checkmark-done-outline"
+            value={totalAcceptedQuotes}
+            label="Accepted Quotes"
+            onPress={() =>
+              router.push({
+                pathname: "/tabs/AcceptedQuotes",
+                params: {
+                  initialQuotes: JSON.stringify(acceptedQuotesPage0),
+                  totalElements: String(totalAcceptedQuotes),
+                },
               })
             }
           />
@@ -421,6 +483,25 @@ export default function ProfileScreen() {
             icon="document-text-outline"
             label="Bulk Quote Requests"
             onPress={() => router.push("/tabs/RequestQuote")}
+          />
+          <Divider />
+          <MenuRow
+            icon="checkmark-done-outline"
+            label="Accepted Quotes"
+            sublabel={
+              totalAcceptedQuotes > 0
+                ? `${totalAcceptedQuotes} quote${totalAcceptedQuotes > 1 ? "s" : ""} accepted`
+                : "No accepted quotes yet"
+            }
+            onPress={() =>
+              router.push({
+                pathname: "/tabs/AcceptedQuotes",
+                params: {
+                  initialQuotes: JSON.stringify(acceptedQuotesPage0),
+                  totalElements: String(totalAcceptedQuotes),
+                },
+              })
+            }
           />
         </View>
 
