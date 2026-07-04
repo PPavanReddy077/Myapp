@@ -10,6 +10,8 @@ import {
   TouchableOpacity,
   Image,
   Alert,
+  Linking,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -102,7 +104,8 @@ function InfoRow({
 export default function QuoteDetailsScreen() {
   const router = useRouter();
   const { qid } = useLocalSearchParams<{ qid: string }>();
-
+  const [refreshing, setRefreshing] = useState(false);
+  const [hasNegotiation, setHasNegotiation] = useState<boolean | null>(null);
   const [quote, setQuote] = useState<Quotation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -124,10 +127,14 @@ export default function QuoteDetailsScreen() {
     })();
   }, []);
 
-  const fetchQuote = useCallback(async () => {
+  const fetchQuote = useCallback(async (isRefresh = false) => {
     if (!qid) return;
     try {
-      setLoading(true);
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
       setError(null);
       const token = await getToken();
       const res = await api.get("/quote/getQuoteById", {
@@ -140,34 +147,66 @@ export default function QuoteDetailsScreen() {
       setError(message || "Failed to load quote details.");
     } finally {
       setLoading(false);
+      setRefreshing(false);
+    }
+  }, [qid]);
+
+  const fetchNegotiationStatus = useCallback(async () => {
+    if (!qid) return;
+    try {
+      const token = await getToken();
+      const res = await api.get("/quote/negotiationStatus", {
+        params: { qid },
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setHasNegotiation(res.data?.message === true);
+    } catch (e: any) {
+      // Backend returns HTTP 400 with { message: false } when no negotiation exists yet
+      if (e?.response?.status === 400 && e?.response?.data?.message === false) {
+        setHasNegotiation(false);
+      } else {
+        console.log("Error fetching negotiation status:", e);
+      }
     }
   }, [qid]);
 
   useEffect(() => {
     fetchQuote();
-  }, [fetchQuote]);
+    fetchNegotiationStatus();
+  }, [fetchQuote, fetchNegotiationStatus]);
 
-  // NOTE: I don't have your actual negotiation/accept endpoints, so these are
-  // placeholders following your existing /quote/... naming convention.
-  // Swap the URL + payload to match your real backend routes.
+  const onRefresh = useCallback(() => {
+    fetchQuote(true);
+    fetchNegotiationStatus();
+  }, [fetchQuote, fetchNegotiationStatus]);
+
   const handleRaiseNegotiation = async () => {
     if (!quote) return;
     try {
       setActionLoading("negotiate");
       const token = await getToken();
       await api.post(
-        "/quote/raiseNegotiation",
-        { qid: quote.Id },
+        `/quote/createNegotiation?qid=${quote.Id}`, {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
       Alert.alert("Negotiation started", "You can now negotiate on this quote.");
       fetchQuote();
+      fetchNegotiationStatus();
     } catch (e: any) {
+      console.log("Error raising negotiation:", e);
       const message = e?.response?.data?.message;
       Alert.alert("Couldn't raise negotiation", message || "Please try again.");
     } finally {
       setActionLoading(null);
     }
+  };
+
+  const handleCall = () => {
+    if (!quote?.user?.phoneNumber) {
+      Alert.alert("No phone number", "This buyer hasn't shared a contact number.");
+      return;
+    }
+    Linking.openURL(`tel:${quote.user.phoneNumber}`);
   };
 
   const handleAccept = async () => {
@@ -187,15 +226,15 @@ export default function QuoteDetailsScreen() {
                 `/quote/acceptQuotation?qid=${quote.Id}`,
                 {},
                 {
-                    headers: { 
-                        Authorization: `Bearer ${token}`
-                    } 
+                  headers: {
+                    Authorization: `Bearer ${token}`
+                  }
                 }
               );
               Alert.alert("Quote accepted");
               fetchQuote();
             } catch (e: any) {
-                console.log("Error accepting quote:", e);
+              console.log("Error accepting quote:", e);
               const message = e?.response?.data?.message;
               Alert.alert("Couldn't accept quote", message || "Please try again.");
             } finally {
@@ -221,7 +260,7 @@ export default function QuoteDetailsScreen() {
       <SafeAreaView style={styles.centered}>
         <Ionicons name="alert-circle-outline" size={40} color={C.textMuted} />
         <Text style={styles.loadingText}>{error || "Quote not found."}</Text>
-        <TouchableOpacity onPress={fetchQuote} style={styles.retryBtn}>
+        <TouchableOpacity onPress={() => fetchQuote()} style={styles.retryBtn}>
           <Text style={styles.retryBtnText}>Retry</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -231,6 +270,7 @@ export default function QuoteDetailsScreen() {
   const sc = statusColor(quote.negotiationStatus);
   const isAccepted = quote.negotiationStatus === "ACCEPTED";
   const isNegotiating = quote.negotiationStatus === "NEGOTIATING";
+  const isOwnQuote = userId !== null && quote.user?.id === userId;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -244,7 +284,15 @@ export default function QuoteDetailsScreen() {
         <View style={{ width: 32 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[C.primary]}
+            tintColor={C.primary}
+          />
+        }>
         <View style={styles.topCard}>
           <View style={styles.topCardHeader}>
             <Text style={styles.cropName}>{quote.cropName}</Text>
@@ -284,68 +332,72 @@ export default function QuoteDetailsScreen() {
           />
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Buyer</Text>
-          <View style={styles.buyerCard}>
-            {quote.user?.profileUrl ? (
-              <Image source={{ uri: quote.user.profileUrl }} style={styles.avatar} />
-            ) : (
-              <View style={[styles.avatar, styles.avatarFallback]}>
-                <Ionicons name="person" size={20} color={C.primary} />
+        {!isOwnQuote && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Buyer</Text>
+            <View style={styles.buyerCard}>
+              {quote.user?.profileUrl ? (
+                <Image source={{ uri: quote.user.profileUrl }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatar, styles.avatarFallback]}>
+                  <Ionicons name="person" size={20} color={C.primary} />
+                </View>
+              )}
+              <View style={{ flex: 1 }}>
+                <Text style={styles.buyerName}>
+                  {quote.user?.username || "Unknown buyer"}
+                </Text>
+                {quote.user?.email ? (
+                  <Text style={styles.buyerSub}>{quote.user.email}</Text>
+                ) : null}
               </View>
-            )}
-            <View style={{ flex: 1 }}>
-              <Text style={styles.buyerName}>
-                {quote.user?.username || "Unknown buyer"}
-              </Text>
               {quote.user?.phoneNumber ? (
-                <Text style={styles.buyerSub}>+91 {quote.user.phoneNumber}</Text>
-              ) : null}
-              {quote.user?.email ? (
-                <Text style={styles.buyerSub}>{quote.user.email}</Text>
+                <TouchableOpacity style={styles.callBtn} onPress={handleCall} activeOpacity={0.8}>
+                  <Ionicons name="call" size={16} color="#fff" />
+                </TouchableOpacity>
               ) : null}
             </View>
           </View>
-        </View>
+        )}
       </ScrollView>
 
-      {!isAccepted && (
-        <View style={styles.actionBar}>
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.negotiateBtn]}
-            activeOpacity={0.85}
-            disabled={actionLoading !== null}
-            onPress={handleRaiseNegotiation}
-          >
-            {actionLoading === "negotiate" ? (
-              <ActivityIndicator color={C.primary} size="small" />
-            ) : (
-              <>
-                <Ionicons name="chatbubbles-outline" size={16} color={C.primary} />
-                <Text style={styles.negotiateBtnText}>
-                  {isNegotiating ? "Continue Negotiation" : "Raise Negotiation"}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.acceptBtn]}
-            activeOpacity={0.85}
-            disabled={actionLoading !== null}
-            onPress={handleAccept}
-          >
-            {actionLoading === "accept" ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <>
-                <Ionicons name="checkmark-circle-outline" size={16} color="#fff" />
-                <Text style={styles.acceptBtnText}>Accept</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
+      {!isAccepted && !isOwnQuote && (
+  <View style={styles.actionBar}>
+    <TouchableOpacity
+      style={[styles.actionBtn, styles.negotiateBtn]}
+      activeOpacity={0.85}
+      disabled={actionLoading !== null}
+      onPress={handleRaiseNegotiation}
+    >
+      {actionLoading === "negotiate" ? (
+        <ActivityIndicator color={C.primary} size="small" />
+      ) : (
+        <>
+          <Ionicons name="chatbubbles-outline" size={16} color={C.primary} />
+          <Text style={styles.negotiateBtnText}>
+            {hasNegotiation ? "Continue Negotiation" : "Raise Negotiation"}
+          </Text>
+        </>
       )}
+    </TouchableOpacity>
+
+    <TouchableOpacity
+      style={[styles.actionBtn, styles.acceptBtn]}
+      activeOpacity={0.85}
+      disabled={actionLoading !== null}
+      onPress={handleAccept}
+    >
+      {actionLoading === "accept" ? (
+        <ActivityIndicator color="#fff" size="small" />
+      ) : (
+        <>
+          <Ionicons name="checkmark-circle-outline" size={16} color="#fff" />
+          <Text style={styles.acceptBtnText}>Accept</Text>
+        </>
+      )}
+    </TouchableOpacity>
+  </View>
+)}
     </SafeAreaView>
   );
 }
@@ -398,6 +450,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 8,
   },
+  disabledBtn: {
+    opacity: 0.4,
+  },
   cropName: { fontSize: 18, fontWeight: "700", color: C.text, flex: 1 },
   statusPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
   statusText: { fontSize: 11, fontWeight: "600" },
@@ -439,14 +494,22 @@ const styles = StyleSheet.create({
   infoValue: { fontSize: 13, color: C.text, fontWeight: "500" },
 
   buyerCard: { flexDirection: "row", alignItems: "center", gap: 12 },
-  avatar: { width: 44, height: 44, borderRadius: 22 },
+  avatar: { width: 48, height: 48, borderRadius: 24 },
   avatarFallback: {
     backgroundColor: C.primaryLight,
     justifyContent: "center",
     alignItems: "center",
   },
   buyerName: { fontSize: 14, fontWeight: "600", color: C.text },
-  buyerSub: { fontSize: 12, color: C.textMuted, marginTop: 2 },
+  buyerSub: { fontSize: 11, color: C.textMuted, marginTop: 2 },
+  callBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: C.primary,
+    justifyContent: "center",
+    alignItems: "center",
+  },
 
   actionBar: {
     flexDirection: "row",

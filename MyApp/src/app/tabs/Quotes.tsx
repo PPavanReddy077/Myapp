@@ -65,6 +65,14 @@ function statusColor(status: NegotiationStatus) {
   }
 }
 
+function formatCurrency(value: number): string {
+  return `₹${value.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+}
+
+function formatQuantity(value: number): string {
+  return value.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+}
+
 function QuoteCard({
   item,
   onPress,
@@ -95,7 +103,7 @@ function QuoteCard({
       <View style={styles.row}>
         <Ionicons name="pricetag-outline" size={13} color={C.textMuted} />
         <Text style={styles.rowText}>
-          ₹{item.cropPrice} · {item.cropQuantity} qty
+          {formatCurrency(item.cropPrice)} · {formatQuantity(item.cropQuantity)} qty
         </Text>
       </View>
 
@@ -467,4 +475,4 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   emptyText: { fontSize: 13, color: C.textMuted },
-});
+}); 
