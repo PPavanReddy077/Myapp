@@ -12,6 +12,8 @@ import {
   Alert,
   Linking,
   RefreshControl,
+  Modal,
+  TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -42,6 +44,14 @@ interface QuoteUser {
   profileUrl?: string;
   createdAt?: string;
   updatedAt?: string;
+}
+
+interface NegotiationItem {
+  Id: number;
+  createdAt: string;
+  updatedAt: string;
+  cropPrice: number | null;
+  user: QuoteUser;
 }
 
 interface Quotation {
@@ -106,7 +116,13 @@ export default function QuoteDetailsScreen() {
   const { qid } = useLocalSearchParams<{ qid: string }>();
   const [refreshing, setRefreshing] = useState(false);
   const [hasNegotiation, setHasNegotiation] = useState<boolean | null>(null);
+  const [negotiations, setNegotiations] = useState<NegotiationItem[]>([]);
+  const [negotiationsLoading, setNegotiationsLoading] = useState(false);
+  const [negotiationsError, setNegotiationsError] = useState<string | null>(null);
   const [quote, setQuote] = useState<Quotation | null>(null);
+  const [priceModalVisible, setPriceModalVisible] = useState(false);
+  const [priceModalType, setPriceModalType] = useState<"negotiate" | "accept" | null>(null);
+  const [priceInput, setPriceInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<"negotiate" | "accept" | null>(
@@ -126,7 +142,7 @@ export default function QuoteDetailsScreen() {
       }
     })();
   }, []);
-
+  const isOwnQuote = userId !== null && quote?.user?.id === userId;
   const fetchQuote = useCallback(async (isRefresh = false) => {
     if (!qid) return;
     try {
@@ -170,28 +186,61 @@ export default function QuoteDetailsScreen() {
     }
   }, [qid]);
 
+  const fetchNegotiations = useCallback(async () => {
+    if (!qid) return;
+    try {
+      setNegotiationsLoading(true);
+      setNegotiationsError(null);
+      const token = await getToken();
+      const res = await api.get("/quote/getNegotiationsForQuotation", {
+        params: { qid, page: 0 },
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      // Backend returns either a Page<> with `content`, or { message: "no negotiations available" }
+      setNegotiations(Array.isArray(res.data?.content) ? res.data.content : []);
+    } catch (e: any) {
+      console.log("Error fetching negotiations:", e);
+      setNegotiationsError(e?.response?.data?.message || "Failed to load negotiations.");
+    } finally {
+      setNegotiationsLoading(false);
+    }
+  }, [qid]);
+
   useEffect(() => {
     fetchQuote();
     fetchNegotiationStatus();
   }, [fetchQuote, fetchNegotiationStatus]);
 
+  useEffect(() => {
+    if (isOwnQuote) {
+      fetchNegotiations();
+    }
+  }, [isOwnQuote, fetchNegotiations]);
+
   const onRefresh = useCallback(() => {
     fetchQuote(true);
     fetchNegotiationStatus();
-  }, [fetchQuote, fetchNegotiationStatus]);
+    if (isOwnQuote) fetchNegotiations();
+  }, [fetchQuote, fetchNegotiationStatus, fetchNegotiations, isOwnQuote]);
 
-  const handleRaiseNegotiation = async () => {
-    if (!quote) return;
+  const handleRaiseNegotiation = async (price: number) => {
+    if (!quote || userId == null) return;
     try {
       setActionLoading("negotiate");
       const token = await getToken();
       await api.post(
-        `/quote/createNegotiation?qid=${quote.Id}`, {},
+        "/quote/createNegotiation",
+        {
+          cropPrice: price,
+          requestQuotation: { Id: quote.Id },
+          user: { id: userId },
+        },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       Alert.alert("Negotiation started", "You can now negotiate on this quote.");
       fetchQuote();
       fetchNegotiationStatus();
+      if (isOwnQuote) fetchNegotiations();
     } catch (e: any) {
       console.log("Error raising negotiation:", e);
       const message = e?.response?.data?.message;
@@ -209,41 +258,70 @@ export default function QuoteDetailsScreen() {
     Linking.openURL(`tel:${quote.user.phoneNumber}`);
   };
 
-  const handleAccept = async () => {
-    if (!quote) return;
-    Alert.alert(
-      "Accept this quote?",
-      `You're about to accept the quote for ${quote.cropName} at ₹${quote.cropPrice}.`,
-      [
-        { text: "Cancel", style: "cancel" },
+  const handleAccept = async (price: number) => {
+    if (!quote || userId == null) return;
+    try {
+      setActionLoading("accept");
+      const token = await getToken();
+      await api.post(
+        "/quote/acceptQuotation",
         {
-          text: "Accept",
-          onPress: async () => {
-            try {
-              setActionLoading("accept");
-              const token = await getToken();
-              await api.post(
-                `/quote/acceptQuotation?qid=${quote.Id}`,
-                {},
-                {
-                  headers: {
-                    Authorization: `Bearer ${token}`
-                  }
-                }
-              );
-              Alert.alert("Quote accepted");
-              fetchQuote();
-            } catch (e: any) {
-              console.log("Error accepting quote:", e);
-              const message = e?.response?.data?.message;
-              Alert.alert("Couldn't accept quote", message || "Please try again.");
-            } finally {
-              setActionLoading(null);
-            }
-          },
+          acceptedPrice: price,
+          requestQuotation: { Id: quote.Id },
+          user: { id: userId },
         },
-      ]
-    );
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      Alert.alert("Quote accepted");
+      fetchQuote();
+      if (isOwnQuote) fetchNegotiations();
+    } catch (e: any) {
+      console.log("Error accepting quote:", e);
+      const message = e?.response?.data?.message;
+      Alert.alert("Couldn't accept quote", message || "Please try again.");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const openNegotiationModal = () => {
+    setPriceModalType("negotiate");
+    setPriceInput("");
+    setPriceModalVisible(true);
+  };
+
+  const openAcceptModal = () => {
+    setPriceModalType("accept");
+    setPriceInput("");
+    setPriceModalVisible(true);
+  };
+
+  const closePriceModal = () => {
+    setPriceModalVisible(false);
+    setPriceModalType(null);
+    setPriceInput("");
+  };
+
+  const handlePriceSubmit = () => {
+    const price = parseFloat(priceInput);
+    if (!priceInput.trim() || isNaN(price)) {
+      Alert.alert("Invalid price", "Please enter a valid number.");
+      return;
+    }
+    if (quote && price < quote.cropPrice) {
+      Alert.alert(
+        "Price too low",
+        `Your price must be higher than the buyer's quoted price of ₹${quote.cropPrice}.`
+      );
+      return;
+    }
+    const type = priceModalType;
+    closePriceModal();
+    if (type === "negotiate") {
+      handleRaiseNegotiation(price);
+    } else if (type === "accept") {
+      handleAccept(price);
+    }
   };
 
   if (loading) {
@@ -270,7 +348,6 @@ export default function QuoteDetailsScreen() {
   const sc = statusColor(quote.negotiationStatus);
   const isAccepted = quote.negotiationStatus === "ACCEPTED";
   const isNegotiating = quote.negotiationStatus === "NEGOTIATING";
-  const isOwnQuote = userId !== null && quote.user?.id === userId;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -332,72 +409,138 @@ export default function QuoteDetailsScreen() {
           />
         </View>
 
-        {!isOwnQuote && (
+        {isOwnQuote && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Buyer</Text>
-            <View style={styles.buyerCard}>
-              {quote.user?.profileUrl ? (
-                <Image source={{ uri: quote.user.profileUrl }} style={styles.avatar} />
-              ) : (
-                <View style={[styles.avatar, styles.avatarFallback]}>
-                  <Ionicons name="person" size={20} color={C.primary} />
+            <Text style={styles.sectionTitle}>Negotiations</Text>
+
+            {negotiationsLoading ? (
+              <ActivityIndicator color={C.primary} style={{ marginVertical: 12 }} />
+            ) : negotiationsError ? (
+              <Text style={styles.emptyNegotiationsText}>{negotiationsError}</Text>
+            ) : negotiations.length === 0 ? (
+              <Text style={styles.emptyNegotiationsText}>No negotiations yet.</Text>
+            ) : (
+              negotiations.map((neg) => (
+                <View key={neg.Id} style={styles.negotiationCard}>
+                  <View style={styles.negotiationHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.negotiationBuyer}>
+                        {neg.user?.username || "Buyer"}
+                      </Text>
+                      <Text style={styles.negotiationDate}>{formatDate(neg.createdAt)}</Text>
+                    </View>
+                    <Text style={styles.negotiationPrice}>
+                      {neg.cropPrice != null ? `₹${neg.cropPrice}` : "No offer yet"}
+                    </Text>
+                  </View>
+
+                  <View style={styles.negotiationActions}>
+                    <TouchableOpacity
+                      style={[styles.negotiationActionBtn, styles.negotiateBtn]}
+                      activeOpacity={0.85}
+                      disabled={actionLoading !== null}
+                      onPress={openNegotiationModal}
+                    >
+                      <Ionicons name="chatbubbles-outline" size={14} color={C.primary} />
+                      <Text style={styles.negotiateBtnText}>Raise Negotiation</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.negotiationActionBtn, styles.acceptBtn]}
+                      activeOpacity={0.85}
+                      disabled={actionLoading !== null}
+                      onPress={openAcceptModal}
+                    >
+                      <Ionicons name="checkmark-circle-outline" size={14} color="#fff" />
+                      <Text style={styles.acceptBtnText}>Accept</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              )}
-              <View style={{ flex: 1 }}>
-                <Text style={styles.buyerName}>
-                  {quote.user?.username || "Unknown buyer"}
-                </Text>
-                {quote.user?.email ? (
-                  <Text style={styles.buyerSub}>{quote.user.email}</Text>
-                ) : null}
-              </View>
-              {quote.user?.phoneNumber ? (
-                <TouchableOpacity style={styles.callBtn} onPress={handleCall} activeOpacity={0.8}>
-                  <Ionicons name="call" size={16} color="#fff" />
-                </TouchableOpacity>
-              ) : null}
-            </View>
+              ))
+            )}
           </View>
         )}
       </ScrollView>
 
       {!isAccepted && !isOwnQuote && (
-  <View style={styles.actionBar}>
-    <TouchableOpacity
-      style={[styles.actionBtn, styles.negotiateBtn]}
-      activeOpacity={0.85}
-      disabled={actionLoading !== null}
-      onPress={handleRaiseNegotiation}
-    >
-      {actionLoading === "negotiate" ? (
-        <ActivityIndicator color={C.primary} size="small" />
-      ) : (
-        <>
-          <Ionicons name="chatbubbles-outline" size={16} color={C.primary} />
-          <Text style={styles.negotiateBtnText}>
-            {hasNegotiation ? "Continue Negotiation" : "Raise Negotiation"}
-          </Text>
-        </>
-      )}
-    </TouchableOpacity>
+        <View style={styles.actionBar}>
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.negotiateBtn]}
+            activeOpacity={0.85}
+            disabled={actionLoading !== null}
+            onPress={openNegotiationModal}
+          >
+            {actionLoading === "negotiate" ? (
+              <ActivityIndicator color={C.primary} size="small" />
+            ) : (
+              <>
+                <Ionicons name="chatbubbles-outline" size={16} color={C.primary} />
+                <Text style={styles.negotiateBtnText}>
+                  {hasNegotiation ? "Continue Negotiation" : "Raise Negotiation"}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
 
-    <TouchableOpacity
-      style={[styles.actionBtn, styles.acceptBtn]}
-      activeOpacity={0.85}
-      disabled={actionLoading !== null}
-      onPress={handleAccept}
-    >
-      {actionLoading === "accept" ? (
-        <ActivityIndicator color="#fff" size="small" />
-      ) : (
-        <>
-          <Ionicons name="checkmark-circle-outline" size={16} color="#fff" />
-          <Text style={styles.acceptBtnText}>Accept</Text>
-        </>
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.acceptBtn]}
+            activeOpacity={0.85}
+            disabled={actionLoading !== null}
+            onPress={openAcceptModal}
+          >
+            {actionLoading === "accept" ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <>
+                <Ionicons name="checkmark-circle-outline" size={16} color="#fff" />
+                <Text style={styles.acceptBtnText}>Accept</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
       )}
-    </TouchableOpacity>
-  </View>
-)}
+      <Modal
+        visible={priceModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closePriceModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>
+              {priceModalType === "accept" ? "Accept at what price?" : "Enter your price"}
+            </Text>
+            <Text style={styles.modalSubtitle}>
+              Buyer quoted ₹{quote.cropPrice}. Enter an amount higher than this.
+            </Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="e.g. 45"
+              placeholderTextColor={C.textMuted}
+              keyboardType="numeric"
+              value={priceInput}
+              onChangeText={setPriceInput}
+              autoFocus
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalCancelBtn]}
+                onPress={closePriceModal}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalConfirmBtn]}
+                onPress={handlePriceSubmit}
+              >
+                <Text style={styles.modalConfirmText}>
+                  {priceModalType === "accept" ? "Accept" : "Submit"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -437,6 +580,43 @@ const styles = StyleSheet.create({
 
   scrollContent: { padding: 16, paddingBottom: 24, gap: 16 },
 
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+  },
+  modalCard: {
+    width: "100%",
+    backgroundColor: C.card,
+    borderRadius: 16,
+    padding: 20,
+    gap: 12,
+  },
+  modalTitle: { fontSize: 16, fontWeight: "700", color: C.text },
+  modalSubtitle: { fontSize: 12, color: C.textMuted },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 16,
+    color: C.text,
+  },
+  modalActions: { flexDirection: "row", gap: 10, marginTop: 4 },
+  modalBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  modalCancelBtn: { backgroundColor: C.bg, borderWidth: 1, borderColor: C.border },
+  modalCancelText: { color: C.textSub, fontWeight: "600", fontSize: 13 },
+  modalConfirmBtn: { backgroundColor: C.primary },
+  modalConfirmText: { color: "#fff", fontWeight: "600", fontSize: 13 },
+
   topCard: {
     backgroundColor: C.card,
     borderRadius: 16,
@@ -466,6 +646,33 @@ const styles = StyleSheet.create({
     borderColor: C.border,
     padding: 16,
     gap: 4,
+  },
+  emptyNegotiationsText: { fontSize: 13, color: C.textMuted, paddingVertical: 8 },
+  negotiationCard: {
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+    gap: 10,
+  },
+  negotiationHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
+  negotiationBuyer: { fontSize: 13, fontWeight: "600", color: C.text },
+  negotiationDate: { fontSize: 11, color: C.textMuted, marginTop: 2 },
+  negotiationPrice: { fontSize: 15, fontWeight: "700", color: C.primary },
+  negotiationActions: { flexDirection: "row", gap: 8 },
+  negotiationActionBtn: {
+    flex: 1,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 8,
+    borderRadius: 10,
   },
   sectionTitle: {
     fontSize: 13,
