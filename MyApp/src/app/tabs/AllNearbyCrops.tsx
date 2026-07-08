@@ -57,7 +57,7 @@ function Row({ item }: { item: NearbyCrop }) {
       activeOpacity={0.75}
       onPress={() =>
         router.push({
-          pathname: "/tabs/CropDetailsScreen",
+          pathname: "/tabs/CropDetail",
           params: {
             cropDetailId: String(item.cropDetailId),
             subCategoryId: String(item.subCategoryId),

@@ -117,13 +117,14 @@ function ProductCard({ item }: { item: FreshProduct }) {
 
 function NearbyCropCard({ item }: { item: NearbyCrop }) {
   const router = useRouter();
+  console.log("NearbyCropCard item:", item,"CropDetaild:", item.cropDetailId); // Debugging line to check the item data
   return (
     <TouchableOpacity
       style={styles.farmerCard}
       activeOpacity={0.75}
       onPress={() =>
         router.push({
-          pathname: "/tabs/CropDetailsScreen",
+          pathname: "/tabs/CropDetail",
           params: {
             cropDetailId: String(item.cropDetailId),
             subCategoryId: String(item.subCategoryId),

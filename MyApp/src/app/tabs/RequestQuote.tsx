@@ -15,7 +15,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import  api  from "../../_services/api";
+import api from "../../_services/api";
 import { getToken } from "../../_services/storage";
 
 const C = {
@@ -324,8 +324,8 @@ export default function RequestQuoteScreen() {
                 {selectedSub
                   ? selectedSub.itemName
                   : selectedCategory
-                  ? "Select crop (Tomato, Apple…)"
-                  : "Select a category first"}
+                    ? "Select crop (Tomato, Apple…)"
+                    : "Select a category first"}
               </Text>
               <Ionicons
                 name={subOpen ? "chevron-up" : "chevron-down"}

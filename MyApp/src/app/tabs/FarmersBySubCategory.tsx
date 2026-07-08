@@ -102,7 +102,7 @@ function FarmerCard({ item, activeSort }: { item: Farmer; activeSort: SortKey })
       activeOpacity={0.75}
       onPress={() =>
         router.push({
-          pathname: "/tabs/CropDetailsScreen",
+          pathname: "/tabs/CropDetail",
           params: {
             cropDetailId: String(item.Id),
             subCategoryId: String(item.subCategory?.Id ?? ""),

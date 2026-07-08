@@ -22,6 +22,7 @@ import { getToken } from "../../_services/storage";
 import { jwtDecode } from "jwt-decode";
 
 type NegotiationStatus = "WAITING" | "NEGOTIATING" | "ACCEPTED";
+type PriceModalType = "negotiate" | "accept" | null;
 
 const C = {
   primary: "#3a7d44",
@@ -46,12 +47,23 @@ interface QuoteUser {
   updatedAt?: string;
 }
 
+// NegotiationResponse's PK is lowercase `id` in the Java bean (unlike
+// RequestQuotation/NegotiationRequest, which use capital `Id`).
+interface NegotiationResponseItem {
+  id: number;
+  cropPrice: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface NegotiationItem {
   Id: number;
   createdAt: string;
   updatedAt: string;
   cropPrice: number | null;
   user: QuoteUser;
+  // Buyer's latest counter-offer against this specific negotiation, if any.
+  response?: NegotiationResponseItem | null;
 }
 
 interface Quotation {
@@ -89,6 +101,36 @@ function formatDate(iso?: string) {
   });
 }
 
+// Works out which offer is actually the most recent one on a negotiation
+// thread: the farmer's own ask, or the buyer's counter — whichever has the
+// later updatedAt wins. Falls back to the original quoted crop price.
+function getLatestPrice(
+  basePrice: number,
+  negPrice?: number | null,
+  negUpdatedAt?: string,
+  responsePrice?: number | null,
+  responseUpdatedAt?: string
+) {
+  let latest = basePrice;
+  let latestTime = 0;
+
+  if (negPrice != null && negUpdatedAt) {
+    const t = new Date(negUpdatedAt).getTime();
+    if (t >= latestTime) {
+      latestTime = t;
+      latest = negPrice;
+    }
+  }
+  if (responsePrice != null && responseUpdatedAt) {
+    const t = new Date(responseUpdatedAt).getTime();
+    if (t >= latestTime) {
+      latestTime = t;
+      latest = responsePrice;
+    }
+  }
+  return latest;
+}
+
 function InfoRow({
   icon,
   label,
@@ -115,14 +157,26 @@ export default function QuoteDetailsScreen() {
   const router = useRouter();
   const { qid } = useLocalSearchParams<{ qid: string }>();
   const [refreshing, setRefreshing] = useState(false);
-  const [hasNegotiation, setHasNegotiation] = useState<boolean | null>(null);
+
+  // Farmer's own negotiation thread (non-owner view)
+  const [myNegotiation, setMyNegotiation] = useState<NegotiationItem | null>(null);
+  const [myNegotiationResponse, setMyNegotiationResponse] =
+    useState<NegotiationResponseItem | null>(null);
+
+  // Buyer's list of every farmer's negotiation (owner view)
   const [negotiations, setNegotiations] = useState<NegotiationItem[]>([]);
   const [negotiationsLoading, setNegotiationsLoading] = useState(false);
   const [negotiationsError, setNegotiationsError] = useState<string | null>(null);
+
   const [quote, setQuote] = useState<Quotation | null>(null);
+
   const [priceModalVisible, setPriceModalVisible] = useState(false);
-  const [priceModalType, setPriceModalType] = useState<"negotiate" | "accept" | null>(null);
+  const [priceModalType, setPriceModalType] = useState<PriceModalType>(null);
   const [priceInput, setPriceInput] = useState("");
+  // Which negotiation row the buyer is acting on. Null while the modal is
+  // being used by a farmer acting on their own negotiation.
+  const [activeNegotiation, setActiveNegotiation] = useState<NegotiationItem | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<"negotiate" | "accept" | null>(
@@ -142,7 +196,9 @@ export default function QuoteDetailsScreen() {
       }
     })();
   }, []);
+
   const isOwnQuote = userId !== null && quote?.user?.id === userId;
+
   const fetchQuote = useCallback(async (isRefresh = false) => {
     if (!qid) return;
     try {
@@ -167,7 +223,9 @@ export default function QuoteDetailsScreen() {
     }
   }, [qid]);
 
-  const fetchNegotiationStatus = useCallback(async () => {
+  // --- Farmer's own negotiation (non-owner view) ---
+
+  const fetchMyNegotiation = useCallback(async () => {
     if (!qid) return;
     try {
       const token = await getToken();
@@ -175,16 +233,38 @@ export default function QuoteDetailsScreen() {
         params: { qid },
         headers: { Authorization: `Bearer ${token}` },
       });
-      setHasNegotiation(res.data?.message === true);
-    } catch (e: any) {
-      // Backend returns HTTP 400 with { message: false } when no negotiation exists yet
-      if (e?.response?.status === 400 && e?.response?.data?.message === false) {
-        setHasNegotiation(false);
+      // Backend returns the NegotiationRequest object itself on 200.
+      if (res.data && res.data.Id) {
+        setMyNegotiation(res.data);
       } else {
-        console.log("Error fetching negotiation status:", e);
+        setMyNegotiation(null);
       }
+    } catch (e: any) {
+      // 400 (any body, often empty {}) means no negotiation raised yet.
+      setMyNegotiation(null);
     }
   }, [qid]);
+
+  useEffect(() => {
+    if (!myNegotiation?.Id) {
+      setMyNegotiationResponse(null);
+      return;
+    }
+    (async () => {
+      try {
+        const token = await getToken();
+        const res = await api.get("/quote/getNegotiationResponse", {
+          params: { negotiationRequestId: myNegotiation.Id },
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setMyNegotiationResponse(res.data?.id ? res.data : null);
+      } catch {
+        setMyNegotiationResponse(null);
+      }
+    })();
+  }, [myNegotiation?.Id]);
+
+  // --- Buyer's negotiation list (owner view) ---
 
   const fetchNegotiations = useCallback(async () => {
     if (!qid) return;
@@ -196,8 +276,26 @@ export default function QuoteDetailsScreen() {
         params: { qid, page: 0 },
         headers: { Authorization: `Bearer ${token}` },
       });
-      // Backend returns either a Page<> with `content`, or { message: "no negotiations available" }
-      setNegotiations(Array.isArray(res.data?.content) ? res.data.content : []);
+      const list: NegotiationItem[] = Array.isArray(res.data?.content)
+        ? res.data.content
+        : [];
+
+      // Attach each negotiation's response (buyer's own prior counter, if any).
+      const withResponses = await Promise.all(
+        list.map(async (neg) => {
+          try {
+            const r = await api.get("/quote/getNegotiationResponse", {
+              params: { negotiationRequestId: neg.Id },
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            return { ...neg, response: r.data?.id ? r.data : null };
+          } catch {
+            return { ...neg, response: null };
+          }
+        })
+      );
+
+      setNegotiations(withResponses);
     } catch (e: any) {
       console.log("Error fetching negotiations:", e);
       setNegotiationsError(e?.response?.data?.message || "Failed to load negotiations.");
@@ -208,20 +306,27 @@ export default function QuoteDetailsScreen() {
 
   useEffect(() => {
     fetchQuote();
-    fetchNegotiationStatus();
-  }, [fetchQuote, fetchNegotiationStatus]);
+  }, [fetchQuote]);
 
   useEffect(() => {
+    if (userId == null || !quote) return;
     if (isOwnQuote) {
       fetchNegotiations();
+    } else {
+      fetchMyNegotiation();
     }
-  }, [isOwnQuote, fetchNegotiations]);
+  }, [isOwnQuote, quote, userId, fetchNegotiations, fetchMyNegotiation]);
 
   const onRefresh = useCallback(() => {
     fetchQuote(true);
-    fetchNegotiationStatus();
-    if (isOwnQuote) fetchNegotiations();
-  }, [fetchQuote, fetchNegotiationStatus, fetchNegotiations, isOwnQuote]);
+    if (isOwnQuote) {
+      fetchNegotiations();
+    } else {
+      fetchMyNegotiation();
+    }
+  }, [fetchQuote, fetchNegotiations, fetchMyNegotiation, isOwnQuote]);
+
+  // --- Farmer actions ---
 
   const handleRaiseNegotiation = async (price: number) => {
     if (!quote || userId == null) return;
@@ -239,8 +344,7 @@ export default function QuoteDetailsScreen() {
       );
       Alert.alert("Negotiation started", "You can now negotiate on this quote.");
       fetchQuote();
-      fetchNegotiationStatus();
-      if (isOwnQuote) fetchNegotiations();
+      fetchMyNegotiation();
     } catch (e: any) {
       console.log("Error raising negotiation:", e);
       const message = e?.response?.data?.message;
@@ -248,14 +352,6 @@ export default function QuoteDetailsScreen() {
     } finally {
       setActionLoading(null);
     }
-  };
-
-  const handleCall = () => {
-    if (!quote?.user?.phoneNumber) {
-      Alert.alert("No phone number", "This buyer hasn't shared a contact number.");
-      return;
-    }
-    Linking.openURL(`tel:${quote.user.phoneNumber}`);
   };
 
   const handleAccept = async (price: number) => {
@@ -274,7 +370,7 @@ export default function QuoteDetailsScreen() {
       );
       Alert.alert("Quote accepted");
       fetchQuote();
-      if (isOwnQuote) fetchNegotiations();
+      fetchMyNegotiation();
     } catch (e: any) {
       console.log("Error accepting quote:", e);
       const message = e?.response?.data?.message;
@@ -284,13 +380,95 @@ export default function QuoteDetailsScreen() {
     }
   };
 
+  // --- Buyer actions (per negotiation row) ---
+
+  const handleBuyerCounter = async (neg: NegotiationItem, price: number) => {
+    if (!quote || userId == null) return;
+    try {
+      setActionLoading("negotiate");
+      const token = await getToken();
+      await api.post(
+        "/quote/createNegotiationResponse",
+        {
+          cropPrice: price,
+          negotiationRequest: { Id: neg.Id },
+          buyer: { id: userId },
+          farmer: { id: neg.user.id },
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      Alert.alert("Counter offer sent", `Sent to ${neg.user?.username || "farmer"}.`);
+      fetchNegotiations();
+    } catch (e: any) {
+      console.log("Error sending counter offer:", e);
+      const message = e?.response?.data?.message;
+      Alert.alert("Couldn't send counter offer", message || "Please try again.");
+    } finally {
+      setActionLoading(null);
+      setActiveNegotiation(null);
+    }
+  };
+
+  const handleBuyerAccept = async (neg: NegotiationItem, price: number) => {
+    if (!quote || userId == null) return;
+    try {
+      setActionLoading("accept");
+      const token = await getToken();
+      await api.post(
+        "/quote/acceptQuotation",
+        {
+          acceptedPrice: price,
+          requestQuotation: { Id: quote.Id },
+          user: { id: neg.user.id },
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      Alert.alert("Quote accepted", `Accepted ${neg.user?.username || "farmer"}'s offer.`);
+      fetchQuote();
+      fetchNegotiations();
+    } catch (e: any) {
+      console.log("Error accepting negotiation:", e);
+      const message = e?.response?.data?.message;
+      Alert.alert("Couldn't accept", message || "Please try again.");
+    } finally {
+      setActionLoading(null);
+      setActiveNegotiation(null);
+    }
+  };
+
+  const handleCall = () => {
+    if (!quote?.user?.phoneNumber) {
+      Alert.alert("No phone number", "This buyer hasn't shared a contact number.");
+      return;
+    }
+    Linking.openURL(`tel:${quote.user.phoneNumber}`);
+  };
+
+  // --- Price modal (shared between farmer's own negotiation and buyer's per-row actions) ---
+
   const openNegotiationModal = () => {
+    setActiveNegotiation(null);
     setPriceModalType("negotiate");
     setPriceInput("");
     setPriceModalVisible(true);
   };
 
   const openAcceptModal = () => {
+    setActiveNegotiation(null);
+    setPriceModalType("accept");
+    setPriceInput("");
+    setPriceModalVisible(true);
+  };
+
+  const openNegotiationModalFor = (neg: NegotiationItem) => {
+    setActiveNegotiation(neg);
+    setPriceModalType("negotiate");
+    setPriceInput("");
+    setPriceModalVisible(true);
+  };
+
+  const openAcceptModalFor = (neg: NegotiationItem) => {
+    setActiveNegotiation(neg);
     setPriceModalType("accept");
     setPriceInput("");
     setPriceModalVisible(true);
@@ -300,27 +478,78 @@ export default function QuoteDetailsScreen() {
     setPriceModalVisible(false);
     setPriceModalType(null);
     setPriceInput("");
+    setActiveNegotiation(null);
+  };
+
+  // The floor the entered price must beat: whichever offer (farmer's ask or
+  // buyer's counter) is most recent on the relevant thread.
+  const getBaselinePrice = () => {
+    if (!quote) return 0;
+    if (activeNegotiation) {
+      return getLatestPrice(
+        quote.cropPrice,
+        activeNegotiation.cropPrice,
+        activeNegotiation.updatedAt,
+        activeNegotiation.response?.cropPrice,
+        activeNegotiation.response?.updatedAt
+      );
+    }
+    return getLatestPrice(
+      quote.cropPrice,
+      myNegotiation?.cropPrice,
+      myNegotiation?.updatedAt,
+      myNegotiationResponse?.cropPrice,
+      myNegotiationResponse?.updatedAt
+    );
   };
 
   const handlePriceSubmit = () => {
+    const type = priceModalType;
+    const target = activeNegotiation;
+    const baseline = getBaselinePrice();
+
+    // Accepting means agreeing to whatever the latest offer on the table is —
+    // there's no typed price to validate, just confirm at the baseline.
+    if (type === "accept") {
+      closePriceModal();
+      if (isOwnQuote && target) handleBuyerAccept(target, baseline);
+      else handleAccept(baseline);
+      return;
+    }
+
     const price = parseFloat(priceInput);
     if (!priceInput.trim() || isNaN(price)) {
       Alert.alert("Invalid price", "Please enter a valid number.");
       return;
     }
-    if (quote && price < quote.cropPrice) {
-      Alert.alert(
-        "Price too low",
-        `Your price must be higher than the buyer's quoted price of ₹${quote.cropPrice}.`
-      );
-      return;
+
+    if (isOwnQuote) {
+      // Buyer is countering — wants to pay less, so the new offer must
+      // undercut the farmer's latest ask.
+      if (price >= baseline) {
+        Alert.alert(
+          "Price too high",
+          `Your counter must be lower than the farmer's latest offer of ₹${baseline}.`
+        );
+        return;
+      }
+    } else {
+      // Farmer is asking — wants to earn more, so the new ask must beat
+      // the buyer's latest offer.
+      if (price <= baseline) {
+        Alert.alert(
+          "Price too low",
+          `Your price must be higher than the buyer's latest offer of ₹${baseline}.`
+        );
+        return;
+      }
     }
-    const type = priceModalType;
+
     closePriceModal();
-    if (type === "negotiate") {
+    if (isOwnQuote && target) {
+      handleBuyerCounter(target, price);
+    } else {
       handleRaiseNegotiation(price);
-    } else if (type === "accept") {
-      handleAccept(price);
     }
   };
 
@@ -347,7 +576,6 @@ export default function QuoteDetailsScreen() {
 
   const sc = statusColor(quote.negotiationStatus);
   const isAccepted = quote.negotiationStatus === "ACCEPTED";
-  const isNegotiating = quote.negotiationStatus === "NEGOTIATING";
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -385,30 +613,62 @@ export default function QuoteDetailsScreen() {
           </Text>
         </View>
 
+        {!isOwnQuote && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Buyer</Text>
+            <View style={styles.buyerCard}>
+              {quote.user?.profileUrl ? (
+                <Image source={{ uri: quote.user.profileUrl }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatar, styles.avatarFallback]}>
+                  <Ionicons name="person" size={22} color={C.primary} />
+                </View>
+              )}
+              <View style={{ flex: 1 }}>
+                <Text style={styles.buyerName}>{quote.user?.username || "Buyer"}</Text>
+                <Text style={styles.buyerSub}>{quote.user?.email}</Text>
+              </View>
+              <TouchableOpacity style={styles.callBtn} onPress={handleCall}>
+                <Ionicons name="call" size={18} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Details</Text>
-          <InfoRow
-            icon="location-outline"
-            label="Delivery Location"
-            value={quote.deliveryLocation}
-          />
-          <InfoRow
-            icon="calendar-outline"
-            label="Required By"
-            value={formatDate(quote.requiredDate)}
-          />
-          <InfoRow
-            icon="time-outline"
-            label="Requested On"
-            value={formatDate(quote.createdAt)}
-          />
-          <InfoRow
-            icon="refresh-outline"
-            label="Last Updated"
-            value={formatDate(quote.updatedAt)}
-          />
+          <InfoRow icon="location-outline" label="Delivery Location" value={quote.deliveryLocation} />
+          <InfoRow icon="calendar-outline" label="Required By" value={formatDate(quote.requiredDate)} />
+          <InfoRow icon="time-outline" label="Requested On" value={formatDate(quote.createdAt)} />
+          <InfoRow icon="refresh-outline" label="Last Updated" value={formatDate(quote.updatedAt)} />
         </View>
 
+        {/* Farmer's own negotiation thread with this buyer */}
+        {!isOwnQuote && myNegotiation && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Your Negotiation</Text>
+            <View style={styles.negotiationCard}>
+              <View style={styles.negotiationHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.negotiationBuyer}>Your offer</Text>
+                  <Text style={styles.negotiationDate}>
+                    {formatDate(myNegotiation.updatedAt)}
+                  </Text>
+                </View>
+                <Text style={styles.negotiationPrice}>
+                  {myNegotiation.cropPrice != null ? `₹${myNegotiation.cropPrice}` : "-"}
+                </Text>
+              </View>
+              {myNegotiationResponse && (
+                <Text style={styles.counterOfferText}>
+                  Buyer's counter: ₹{myNegotiationResponse.cropPrice}
+                </Text>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* Buyer's list of every farmer negotiating on this quote */}
         {isOwnQuote && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Negotiations</Text>
@@ -434,27 +694,35 @@ export default function QuoteDetailsScreen() {
                     </Text>
                   </View>
 
-                  <View style={styles.negotiationActions}>
-                    <TouchableOpacity
-                      style={[styles.negotiationActionBtn, styles.negotiateBtn]}
-                      activeOpacity={0.85}
-                      disabled={actionLoading !== null}
-                      onPress={openNegotiationModal}
-                    >
-                      <Ionicons name="chatbubbles-outline" size={14} color={C.primary} />
-                      <Text style={styles.negotiateBtnText}>Raise Negotiation</Text>
-                    </TouchableOpacity>
+                  {neg.response?.cropPrice != null && (
+                    <Text style={styles.counterOfferText}>
+                      Your counter: ₹{neg.response.cropPrice}
+                    </Text>
+                  )}
 
-                    <TouchableOpacity
-                      style={[styles.negotiationActionBtn, styles.acceptBtn]}
-                      activeOpacity={0.85}
-                      disabled={actionLoading !== null}
-                      onPress={openAcceptModal}
-                    >
-                      <Ionicons name="checkmark-circle-outline" size={14} color="#fff" />
-                      <Text style={styles.acceptBtnText}>Accept</Text>
-                    </TouchableOpacity>
-                  </View>
+                  {!isAccepted && (
+                    <View style={styles.negotiationActions}>
+                      <TouchableOpacity
+                        style={[styles.negotiationActionBtn, styles.negotiateBtn]}
+                        activeOpacity={0.85}
+                        disabled={actionLoading !== null}
+                        onPress={() => openNegotiationModalFor(neg)}
+                      >
+                        <Ionicons name="chatbubbles-outline" size={14} color={C.primary} />
+                        <Text style={styles.negotiateBtnText}>Counter Offer</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[styles.negotiationActionBtn, styles.acceptBtn]}
+                        activeOpacity={0.85}
+                        disabled={actionLoading !== null}
+                        onPress={() => openAcceptModalFor(neg)}
+                      >
+                        <Ionicons name="checkmark-circle-outline" size={14} color="#fff" />
+                        <Text style={styles.acceptBtnText}>Accept</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
                 </View>
               ))
             )}
@@ -476,7 +744,7 @@ export default function QuoteDetailsScreen() {
               <>
                 <Ionicons name="chatbubbles-outline" size={16} color={C.primary} />
                 <Text style={styles.negotiateBtnText}>
-                  {hasNegotiation ? "Continue Negotiation" : "Raise Negotiation"}
+                  {myNegotiation ? "Continue Negotiation" : "Raise Negotiation"}
                 </Text>
               </>
             )}
@@ -508,20 +776,30 @@ export default function QuoteDetailsScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>
-              {priceModalType === "accept" ? "Accept at what price?" : "Enter your price"}
+              {priceModalType === "accept"
+                ? "Confirm accept"
+                : isOwnQuote
+                ? "Enter your counter offer"
+                : "Enter your price"}
             </Text>
             <Text style={styles.modalSubtitle}>
-              Buyer quoted ₹{quote.cropPrice}. Enter an amount higher than this.
+              {priceModalType === "accept"
+                ? `You're accepting the current offer of ₹${getBaselinePrice()}.`
+                : isOwnQuote
+                ? `Farmer's latest ask is ₹${getBaselinePrice()}. Enter an amount lower than this.`
+                : `Buyer's latest offer is ₹${getBaselinePrice()}. Enter an amount higher than this.`}
             </Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="e.g. 45"
-              placeholderTextColor={C.textMuted}
-              keyboardType="numeric"
-              value={priceInput}
-              onChangeText={setPriceInput}
-              autoFocus
-            />
+            {priceModalType !== "accept" && (
+              <TextInput
+                style={styles.modalInput}
+                placeholder="e.g. 45"
+                placeholderTextColor={C.textMuted}
+                keyboardType="numeric"
+                value={priceInput}
+                onChangeText={setPriceInput}
+                autoFocus
+              />
+            )}
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={[styles.modalBtn, styles.modalCancelBtn]}
@@ -664,6 +942,11 @@ const styles = StyleSheet.create({
   negotiationBuyer: { fontSize: 13, fontWeight: "600", color: C.text },
   negotiationDate: { fontSize: 11, color: C.textMuted, marginTop: 2 },
   negotiationPrice: { fontSize: 15, fontWeight: "700", color: C.primary },
+  counterOfferText: {
+    fontSize: 12,
+    color: C.accent,
+    fontWeight: "600",
+  },
   negotiationActions: { flexDirection: "row", gap: 8 },
   negotiationActionBtn: {
     flex: 1,
