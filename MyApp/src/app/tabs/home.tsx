@@ -117,7 +117,6 @@ function ProductCard({ item }: { item: FreshProduct }) {
 
 function NearbyCropCard({ item }: { item: NearbyCrop }) {
   const router = useRouter();
-  console.log("NearbyCropCard item:", item,"CropDetaild:", item.cropDetailId); // Debugging line to check the item data
   return (
     <TouchableOpacity
       style={styles.farmerCard}

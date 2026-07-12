@@ -297,7 +297,6 @@ export default function QuoteDetailsScreen() {
 
       setNegotiations(withResponses);
     } catch (e: any) {
-      console.log("Error fetching negotiations:", e);
       setNegotiationsError(e?.response?.data?.message || "Failed to load negotiations.");
     } finally {
       setNegotiationsLoading(false);
@@ -346,7 +345,6 @@ export default function QuoteDetailsScreen() {
       fetchQuote();
       fetchMyNegotiation();
     } catch (e: any) {
-      console.log("Error raising negotiation:", e);
       const message = e?.response?.data?.message;
       Alert.alert("Couldn't raise negotiation", message || "Please try again.");
     } finally {
@@ -372,7 +370,6 @@ export default function QuoteDetailsScreen() {
       fetchQuote();
       fetchMyNegotiation();
     } catch (e: any) {
-      console.log("Error accepting quote:", e);
       const message = e?.response?.data?.message;
       Alert.alert("Couldn't accept quote", message || "Please try again.");
     } finally {
@@ -400,7 +397,6 @@ export default function QuoteDetailsScreen() {
       Alert.alert("Counter offer sent", `Sent to ${neg.user?.username || "farmer"}.`);
       fetchNegotiations();
     } catch (e: any) {
-      console.log("Error sending counter offer:", e);
       const message = e?.response?.data?.message;
       Alert.alert("Couldn't send counter offer", message || "Please try again.");
     } finally {
@@ -427,7 +423,6 @@ export default function QuoteDetailsScreen() {
       fetchQuote();
       fetchNegotiations();
     } catch (e: any) {
-      console.log("Error accepting negotiation:", e);
       const message = e?.response?.data?.message;
       Alert.alert("Couldn't accept", message || "Please try again.");
     } finally {

@@ -192,8 +192,6 @@ export default function QuotesScreen() {
         setHasMore(res.data?.last === false);
         setPage(nextPage);
       } catch (e: any) {
-        // Backend returns 400 with { message: "..." } when empty
-        console.error("Error fetching quotes:", e);
         const status = e?.response?.status;
         const message = e?.response?.data?.message;
         const emptyMessages = [

@@ -101,7 +101,6 @@ export default function RequestQuoteScreen() {
         setCategories(res.data);
       } catch (error) {
         Alert.alert("Error", "Could not load categories");
-        console.log(error);
       } finally {
         setLoadingCat(false);
       }
@@ -124,7 +123,6 @@ export default function RequestQuoteScreen() {
         setFilteredSubs(res.data);
       } catch (error) {
         Alert.alert("Error", "Could not load sub-categories");
-        console.log(error);
       } finally {
         setLoadingSub(false);
       }

@@ -8,6 +8,7 @@ import {
   Image,
   StatusBar,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -203,7 +204,7 @@ export default function FavouriteFarmers() {
       setPage(nextPage);
       setIsLast(data.last);
     } catch (e) {
-      console.error("fetchNextPage failed:", e);
+      Alert.alert("Error", "Failed to load more followers. Please try again.");
     } finally {
       setLoadingMore(false);
       isFetching.current = false;
@@ -234,16 +235,6 @@ export default function FavouriteFarmers() {
           styles.listContent,
           likes.length === 0 && styles.listContentEmpty,
         ]}
-        ListHeaderComponent={
-          likes.length > 0 ? (
-            <View style={styles.summaryStrip}>
-              <Ionicons name="heart" size={14} color={C.primary} />
-              <Text style={styles.summaryText}>
-                {total} buyer{total !== 1 ? "s" : ""} follow your farm
-              </Text>
-            </View>
-          ) : null
-        }
         ListEmptyComponent={<EmptyState />}
         ListFooterComponent={<FooterLoader visible={loadingMore} />}
         onEndReachedThreshold={0.4}      

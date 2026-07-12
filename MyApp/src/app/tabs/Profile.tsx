@@ -245,7 +245,7 @@ export default function ProfileScreen() {
         api.post(`/user/getUser?id=${userId}`, {}, {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        api.get(`/like/getLikes?farmerId=${userId}&page=0&size=10`, {
+        api.get(`/like/getLikesForFarmer?farmerId=${userId}&page=0`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
         api.get(`/crop/getByFarmer?farmerId=${userId}`, {
@@ -259,7 +259,6 @@ export default function ProfileScreen() {
       if (userRes.status === "fulfilled") {
         setUser(userRes.value.data);
       } else {
-        console.error("getUser failed:", userRes.reason);
         setError("Failed to load profile.");
       }
 
@@ -390,8 +389,22 @@ export default function ProfileScreen() {
             </View>
           </View>
         </View>
+
         <View style={styles.statsRow}>
-          <StatPill icon="heart" value={totalLikes} label="Followers" />
+          <StatPill
+            icon="heart"
+            value={totalLikes}
+            label="Likes"
+            onPress={() =>
+              router.push({
+                pathname: "/tabs/FavouriteFarmers",
+                params: {
+                  initialLikes: JSON.stringify(likesPage0),
+                  totalElements: String(totalLikes),
+                },
+              })
+            }
+          />
           <View style={styles.statDivider} />
           <StatPill
             icon="leaf-outline"
@@ -485,24 +498,6 @@ export default function ProfileScreen() {
             onPress={() => router.push("/tabs/RequestQuote")}
           />
           <Divider />
-          <MenuRow
-            icon="checkmark-done-outline"
-            label="Accepted Quotes"
-            sublabel={
-              totalAcceptedQuotes > 0
-                ? `${totalAcceptedQuotes} quote${totalAcceptedQuotes > 1 ? "s" : ""} accepted`
-                : "No accepted quotes yet"
-            }
-            onPress={() =>
-              router.push({
-                pathname: "/tabs/AcceptedQuotes",
-                params: {
-                  initialQuotes: JSON.stringify(acceptedQuotesPage0),
-                  totalElements: String(totalAcceptedQuotes),
-                },
-              })
-            }
-          />
         </View>
 
         <SectionHeader title="Delivery" />

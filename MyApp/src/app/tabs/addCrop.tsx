@@ -79,7 +79,6 @@ async function geocodeVillage(
         }
       );
       if (!res.ok) {
-        console.log(`Nominatim lookup "${q}" failed with status ${res.status}`);
       } else {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
@@ -89,7 +88,7 @@ async function geocodeVillage(
         }
       }
     } catch (err) {
-      console.log(`Nominatim lookup "${q}" threw:`, err);
+      Alert.alert("Error", "Location lookup failed. Check your connection and try again.");
     }
     if (i < attempts.length - 1) await sleep(1100);
   }
@@ -152,7 +151,6 @@ useEffect(() => {
       setCategories(res.data);
     } catch (error) {
       Alert.alert("Error", "Could not load categories");
-      console.log(error);
     } finally {
       setLoadingCat(false);
     }
@@ -175,7 +173,6 @@ useEffect(() => {
       setFilteredSubs(res.data); 
     } catch (error) {
       Alert.alert("Error", "Could not load sub-categories");
-      console.log(error);
     } finally {
       setLoadingSub(false);
     }
@@ -305,7 +302,6 @@ useEffect(() => {
       { text: "OK", onPress: () => router.back() },
     ]);
   } catch (err: any) {
-    console.log("Upload error:", err?.response?.data ?? err);
     Alert.alert(
       "Upload failed",
       err?.response?.data?.message ?? "Something went wrong. Please try again."
