@@ -242,7 +242,7 @@ export default function ProfileScreen() {
     const { userId } = jwtDecode<JwtPayload>(token);
     try {
       const [userRes, likesRes, cropRes, acceptedQuotesRes] = await Promise.allSettled([
-        api.post(`/user/getUser?id=${userId}`, {}, {
+        api.get(`/user/getUser?id=${userId}`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
         api.get(`/like/getLikesForFarmer?farmerId=${userId}&page=0`, {
@@ -255,7 +255,6 @@ export default function ProfileScreen() {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ]);
-
       if (userRes.status === "fulfilled") {
         setUser(userRes.value.data);
       } else {
