@@ -265,6 +265,12 @@ export default function CropDetail() {
 
   const isCropAccepted = crop?.cropDetailsStatus === "CROP_ACCEPTED";
 
+  // Buyer can accept directly if the farmer sent a counter-offer, OR if the
+  // buyer never raised a negotiation at all (accepting the listed price).
+  // If a negotiation is pending farmer response, there's nothing to accept yet.
+  const canAcceptAsBuyer =
+    !isCropAccepted && Boolean(myNegotiationResponse || !myNegotiationRequest);
+
   // ---------------------------------------------------------------------
   // Once a crop is CROP_ACCEPTED, fetch who the winning buyer is + the
   // price they closed at, so we can swap the negotiation UI for a
@@ -571,21 +577,30 @@ export default function CropDetail() {
   };
 
   const acceptAsBuyer = async () => {
-    if (!myNegotiationRequest || !myNegotiationResponse || !crop?.Id || !currentUserId) return;
+    if (!crop?.Id || !currentUserId) return;
+    // If the farmer has sent a counter, accept that price. Otherwise, as
+    // long as the buyer never raised a negotiation, accept the farmer's
+    // originally listed price directly — no negotiation required.
+    const priceToAccept = myNegotiationResponse
+      ? myNegotiationResponse.cropPrice
+      : !myNegotiationRequest
+      ? crop.cropPrice
+      : null;
+    if (priceToAccept == null) return;
     setBuyerSubmitting(true);
     try {
       const token = await getToken();
       const res = await API.post(
         `/negotiationRequest/acceptNegotiation`,
         {
-          acceptedPrice: myNegotiationResponse.cropPrice,
+          acceptedPrice: priceToAccept,
           cropDetails: { Id: crop.Id },
           buyer: { id: currentUserId },
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (res.data && !res.data.message) {
-        Alert.alert("Deal accepted!", `You've agreed on ₹${myNegotiationResponse.cropPrice} per unit.`);
+        Alert.alert("Deal accepted!", `You've agreed on ₹${priceToAccept} per unit.`);
         setBuyerModalVisible(false);
       } else {
         Alert.alert("Error", res.data?.message || "Couldn't accept the offer");
@@ -1177,14 +1192,19 @@ export default function CropDetail() {
             style={[
               styles.footerBtn,
               styles.footerBtnSecondary,
-              !farmer?.phoneNumber && styles.footerBtnDisabled,
+              (!canAcceptAsBuyer || buyerNegotiationLoading || buyerSubmitting) &&
+                styles.footerBtnDisabled,
             ]}
             activeOpacity={0.8}
-            onPress={handleCall}
-            disabled={!farmer?.phoneNumber}
+            onPress={acceptAsBuyer}
+            disabled={!canAcceptAsBuyer || buyerNegotiationLoading || buyerSubmitting}
           >
-            <Ionicons name="call-outline" size={18} color={C.primary} />
-            <Text style={styles.footerBtnTextSecondary}>Call</Text>
+            {buyerSubmitting ? (
+              <ActivityIndicator size="small" color={C.primary} />
+            ) : (
+              <Ionicons name="checkmark-outline" size={18} color={C.primary} />
+            )}
+            <Text style={styles.footerBtnTextSecondary}>Accept</Text>
           </TouchableOpacity>
 
           {isCropAccepted ? (
